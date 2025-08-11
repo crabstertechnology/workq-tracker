@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = 'https://ajuimiedhxrmtorlflhy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqdWltaWVkaHhybXRvcmxmbGh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxODU0MTQsImV4cCI6MjA2ODc2MTQxNH0.6rhOdi7pvSEOBNc9ImrOs9-jNXaxYt57s3oB3VhIu1Y';
 
-// Demo mode for testing without Supabasee
+// Demo mode for testing without Supabase
 const DEMO_MODE = true; // Set to false when you have Supabase configured
 // Supabase Client
 const createSupabaseClient = () => {
