@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/workq/static/css/main.0c9e6609.css",
+    "main.js": "/workq/static/js/main.7e90c122.js",
+    "index.html": "/workq/index.html",
+    "main.0c9e6609.css.map": "/workq/static/css/main.0c9e6609.css.map",
+    "main.7e90c122.js.map": "/workq/static/js/main.7e90c122.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.0c9e6609.css",
+    "static/js/main.7e90c122.js"
+  ]
+}

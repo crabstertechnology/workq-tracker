@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/workq/static/css/main.c750ba9d.css",
+    "main.js": "/workq/static/js/main.badd3019.js",
+    "index.html": "/workq/index.html",
+    "main.c750ba9d.css.map": "/workq/static/css/main.c750ba9d.css.map",
+    "main.badd3019.js.map": "/workq/static/js/main.badd3019.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c750ba9d.css",
+    "static/js/main.badd3019.js"
+  ]
+}
