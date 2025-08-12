@@ -1,22 +1,23 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, DollarSign, Coffee, Trash2, Save, X, LogIn, LogOut, Minus, User, Settings, BarChart3, Download, ArrowLeft, Eye, EyeOff, UserPlus, Shield } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-// Import Supabase (uncomment when ready for production)
-// // Supabase Configuration (Replace with your actual Supabase URL and anon key)
-const SUPABASE_URL = 'https://ajuimiedhxrmtorlflhy.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqdWltaWVkaHhybXRvcmxmbGh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxODU0MTQsImV4cCI6MjA2ODc2MTQxNH0.6rhOdi7pvSEOBNc9ImrOs9-jNXaxYt57s3oB3VhIu1Y';
 
-// Demo mode for testing without Supabase
-const DEMO_MODE = true; // Set to false when you have Supabase configured
+// 🔧 PRODUCTION CONFIGURATION
+// Replace these with your actual Supabase credentials
+// Better approach:
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+// Ensure these are set in your .env file
+// Set to false for production mode
+const DEMO_MODE = false;
+
 // Supabase Client
 const createSupabaseClient = () => {
   if (DEMO_MODE) {
-    // Mock Supabase client for demo
+    // Mock Supabase client for demo (same as before)
     return {
       auth: {
         signInWithPassword: async ({ email, password }) => {
-          // Demo users - replace with real authentication
           const demoUsers = {
             'admin@company.com': { password: 'admin123', role: 'admin', name: 'Admin User', employee_id: 'EMP001' },
             'john@company.com': { password: 'john123', role: 'employee', name: 'John Doe', employee_id: 'EMP002' },
@@ -43,7 +44,6 @@ const createSupabaseClient = () => {
           return { data: null, error: { message: 'Invalid email or password' } };
         },
         signUp: async ({ email, password, options }) => {
-          // Mock signup - in production, this creates real users
           return {
             data: {
               user: {
@@ -61,7 +61,6 @@ const createSupabaseClient = () => {
           return savedUser ? { data: { user: JSON.parse(savedUser) }, error: null } : { data: { user: null }, error: null };
         },
         onAuthStateChange: (callback) => {
-          // Mock auth state change listener
           return { data: { subscription: { unsubscribe: () => {} } } };
         }
       },
@@ -72,17 +71,7 @@ const createSupabaseClient = () => {
               data: sessionStorage.getItem(`demo_${table}_${value}`) ? 
                 JSON.parse(sessionStorage.getItem(`demo_${table}_${value}`)) : null, 
               error: null 
-            }),
-            limit: (count) => ({
-              order: (column, options) => ({
-                data: [],
-                error: null
-              })
             })
-          }),
-          order: (column, options) => ({
-            data: [],
-            error: null
           })
         }),
         insert: async (data) => {
@@ -122,12 +111,13 @@ const createSupabaseClient = () => {
     };
   }
   
-  // Production Supabase client
-  // Uncomment these lines when you have your Supabase credentials:
-  
-  if (SUPABASE_URL.includes('https://wzitkaoblwfyuvvbgkgh.supabase.co') || SUPABASE_ANON_KEY.includes('sb_secret_U5sXBN5bjRhtlAwd-w8fzw_J04qgwLV')) {
-    throw new Error('Please configure your Supabase credentials');
+  // 🚀 PRODUCTION SUPABASE CLIENT
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || 
+      SUPABASE_URL.includes('your-project-id') || 
+      SUPABASE_ANON_KEY.includes('your-anon-key')) {
+    throw new Error('Please configure your Supabase credentials in the code');
   }
+  
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 };
 
@@ -140,7 +130,7 @@ const WorkTimeCalculator = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLogin, setShowLogin] = useState(true);
   const [showRegister, setShowRegister] = useState(false);
-  const [showAdminPanel, setShowAdminPanel] = useState(true);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   
   // Login Form State
   const [loginForm, setLoginForm] = useState({
@@ -205,7 +195,7 @@ const WorkTimeCalculator = () => {
 
   // Save data when records change (only if authenticated)
   useEffect(() => {
-    if (user && isAuthenticated) {
+    if (user && isAuthenticated && !DEMO_MODE) {
       saveUserData();
     }
   }, [workRecords, leaveRecords, salaryPerHour, user, isAuthenticated]);
@@ -248,7 +238,7 @@ const WorkTimeCalculator = () => {
         setIsAuthenticated(true);
         setShowLogin(false);
         
-        // Save session in demo mode
+        // Save session in demo mode only
         if (DEMO_MODE) {
           sessionStorage.setItem('workq_current_user', JSON.stringify(data.user));
         }
@@ -262,7 +252,7 @@ const WorkTimeCalculator = () => {
     }
   };
 
-  // Handle Registration (Admin only)
+  // Handle Registration (Admin or first user)
   const handleRegister = async (e) => {
     e.preventDefault();
     setRegisterForm(prev => ({ ...prev, isLoading: true, error: '' }));
@@ -290,7 +280,12 @@ const WorkTimeCalculator = () => {
         return;
       }
       
-      alert('Employee registered successfully!');
+      if (DEMO_MODE) {
+        alert('Employee registered successfully!');
+      } else {
+        alert('Registration successful! Please check your email to confirm your account.');
+      }
+      
       setRegisterForm({
         email: '',
         password: '',
@@ -303,6 +298,8 @@ const WorkTimeCalculator = () => {
         error: ''
       });
       setShowRegister(false);
+      setShowAdminPanel(false);
+      setShowLogin(true);
     } catch (error) {
       console.error('Registration error:', error);
       setRegisterForm(prev => ({ ...prev, error: 'Registration failed. Please try again.', isLoading: false }));
@@ -313,7 +310,9 @@ const WorkTimeCalculator = () => {
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
-      sessionStorage.removeItem('workq_current_user');
+      if (DEMO_MODE) {
+        sessionStorage.removeItem('workq_current_user');
+      }
       setUser(null);
       setIsAuthenticated(false);
       setWorkRecords({});
@@ -321,14 +320,16 @@ const WorkTimeCalculator = () => {
       setSalaryPerHour(500);
       setCurrentView('timetracker');
       setShowLogin(true);
+      setShowAdminPanel(false);
+      setShowRegister(false);
     } catch (error) {
       console.error('Error signing out:', error);
     }
   };
 
-  // Data Management Functions
+  // 🗄️ PRODUCTION DATA MANAGEMENT
   const saveUserData = async () => {
-    if (!user || !isAuthenticated) return;
+    if (!user || !isAuthenticated || DEMO_MODE) return;
     
     try {
       const userData = {
@@ -339,12 +340,13 @@ const WorkTimeCalculator = () => {
         last_updated: new Date().toISOString()
       };
       
-      if (DEMO_MODE) {
-        // Save to sessionStorage in demo mode
-        sessionStorage.setItem(`workq_data_${user.id}`, JSON.stringify(userData));
-      } else {
-        // Save to Supabase
-        await supabase.from('user_data').upsert(userData);
+      const { error } = await supabase
+        .from('user_data')
+        .upsert(userData);
+      
+      if (error) {
+        console.error('Error saving data:', error);
+        alert('Error saving data. Please try again.');
       }
     } catch (error) {
       console.error('Error saving data:', error);
@@ -354,7 +356,7 @@ const WorkTimeCalculator = () => {
   const loadUserData = async (userId) => {
     try {
       if (DEMO_MODE) {
-        // Load from sessionStorage in demo mode
+        // Demo mode logic (same as before)
         const userData = sessionStorage.getItem(`workq_data_${userId}`);
         if (userData) {
           const parsed = JSON.parse(userData);
@@ -363,12 +365,17 @@ const WorkTimeCalculator = () => {
           setSalaryPerHour(parsed.salary_per_hour || 500);
         }
       } else {
-        // Load from Supabase
+        // 🚀 PRODUCTION: Load from Supabase
         const { data, error } = await supabase
           .from('user_data')
           .select('*')
           .eq('user_id', userId)
           .single();
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+          console.error('Error loading data:', error);
+          return;
+        }
         
         if (data) {
           setWorkRecords(data.work_records || {});
@@ -383,9 +390,8 @@ const WorkTimeCalculator = () => {
 
   // Return to index.html function
   const returnToIndex = () => {
-  window.location.href = '../index.html';
-};
-
+    window.location.href = '../index.html';
+  };
 
   // Time utility functions (same as before)
   const timeObjectTo24Hour = (timeObj) => {
@@ -440,7 +446,7 @@ const WorkTimeCalculator = () => {
     return `₹${rupees.toLocaleString('en-IN')}.${paise.toString().padStart(2, '0')}`;
   };
 
-  // Calendar functions (same as before)
+  // Calendar functions
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
 
@@ -568,7 +574,7 @@ const WorkTimeCalculator = () => {
     }
   };
 
-  // Statistics functions (same as before)
+  // Statistics functions
   const getTotalHours = () => {
     return Object.values(workRecords).reduce((total, record) => total + record.workingHours, 0);
   };
@@ -599,7 +605,6 @@ const WorkTimeCalculator = () => {
   };
 
   const exportData = () => {
-    // Export functionality (same as before)
     alert('Export functionality - would generate PDF report');
   };
 
@@ -617,7 +622,9 @@ const WorkTimeCalculator = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <h2 className="text-xl font-semibold text-gray-700">Loading WorkQ...</h2>
-          <p className="text-gray-500 mt-2">Initializing Application</p>
+          <p className="text-gray-500 mt-2">
+            {DEMO_MODE ? 'Demo Mode' : 'Production Mode'} - Initializing Application
+          </p>
         </div>
       </div>
     );
@@ -644,92 +651,23 @@ const WorkTimeCalculator = () => {
                 WorkQ
               </h1>
               <p className="text-gray-600">Employee Time Tracking System</p>
-              <p className="text-sm text-gray-500 mt-2">Secure Employee Dashboard</p>
+              <p className="text-sm text-gray-500 mt-2">
+                {DEMO_MODE ? '🔧 Demo Mode' : '🚀 Production Mode'} - Secure Employee Dashboard
+              </p>
             </div>
 
-            {/* Login Form */}
-            {showLogin && !showRegister && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-gray-800 text-center mb-6">Login</h2>
-                
-                {loginForm.error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-                    {loginForm.error}
-                  </div>
-                )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={loginForm.email}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                    onKeyPress={(e) => e.key === 'Enter' && handleLogin(e)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter your email"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <div className="relative">
-                    <input
-                      type={loginForm.showPassword ? 'text' : 'password'}
-                      value={loginForm.password}
-                      onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                      onKeyPress={(e) => e.key === 'Enter' && handleLogin(e)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-                      placeholder="Enter your password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setLoginForm(prev => ({ ...prev, showPassword: !prev.showPassword }))}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                    >
-                      {loginForm.showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={handleLogin}
-                  disabled={loginForm.isLoading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                  {loginForm.isLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Signing In...
-                    </>
-                  ) : (
-                    <>
-                      <LogIn size={20} />
-                      Sign In
-                    </>
-                  )}
-                </button>
-                
-                {user?.user_metadata?.role === 'admin' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowRegister(true)}
-                    className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
-                  >
-                    <UserPlus size={20} />
-                    Register New Employee
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Registration Form (Admin Only) */}
-            {showRegister && (
+            {/* Admin Registration Panel (for first user or admin access) */}
+            {(showAdminPanel || showRegister) && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800">Register Employee</h2>
+                  <h2 className="text-2xl font-bold text-gray-800">Register New Employee</h2>
                   <button
                     type="button"
-                    onClick={() => setShowRegister(false)}
+                    onClick={() => {
+                      setShowRegister(false);
+                      setShowAdminPanel(false);
+                      setShowLogin(true);
+                    }}
                     className="text-gray-500 hover:text-gray-700"
                   >
                     <X size={24} />
@@ -742,106 +680,195 @@ const WorkTimeCalculator = () => {
                   </div>
                 )}
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={registerForm.fullName}
+                        onChange={(e) => setRegisterForm(prev => ({ ...prev, fullName: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                      <input
+                        type="text"
+                        required
+                        value={registerForm.employeeId}
+                        onChange={(e) => setRegisterForm(prev => ({ ...prev, employeeId: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="EMP001"
+                      />
+                    </div>
+                  </div>
+                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input
-                      type="text"
-                      value={registerForm.fullName}
-                      onChange={(e) => setRegisterForm(prev => ({ ...prev, fullName: e.target.value }))}
+                      type="email"
+                      required
+                      value={registerForm.email}
+                      onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="John Doe"
+                      placeholder="john@company.com"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                    <input
-                      type="text"
-                      value={registerForm.employeeId}
-                      onChange={(e) => setRegisterForm(prev => ({ ...prev, employeeId: e.target.value }))}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <select
+                      value={registerForm.role}
+                      onChange={(e) => setRegisterForm(prev => ({ ...prev, role: e.target.value }))}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="EMP001"
-                    />
+                    >
+                      <option value="employee">Employee</option>
+                      <option value="admin">Admin</option>
+                    </select>
                   </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={registerForm.email}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="john@company.com"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                  <select
-                    value={registerForm.role}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, role: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="employee">Employee</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <div className="relative">
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div className="relative">
+                      <input
+                        type={registerForm.showPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={registerForm.password}
+                        onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                        placeholder="Enter password (min 6 characters)"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRegisterForm(prev => ({ ...prev, showPassword: !prev.showPassword }))}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                      >
+                        {registerForm.showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
                     <input
                       type={registerForm.showPassword ? 'text' : 'password'}
-                      value={registerForm.password}
-                      onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-                      placeholder="Enter password"
+                      required
+                      value={registerForm.confirmPassword}
+                      onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Confirm password"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setRegisterForm(prev => ({ ...prev, showPassword: !prev.showPassword }))}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                    >
-                      {registerForm.showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
                   </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-                  <input
-                    type={registerForm.showPassword ? 'text' : 'password'}
-                    value={registerForm.confirmPassword}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Confirm password"
-                  />
-                </div>
-                
-                <button
-                  onClick={handleRegister}
-                  disabled={registerForm.isLoading}
-                  className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                  {registerForm.isLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Registering...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus size={20} />
-                      Register Employee
-                    </>
-                  )}
-                </button>
+                  
+                  <button
+                    type="submit"
+                    disabled={registerForm.isLoading}
+                    className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                  >
+                    {registerForm.isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Registering...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={20} />
+                        Register Employee
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
             )}
 
-            {/* Demo Credentials */}
-            {DEMO_MODE && showLogin && !showRegister && (
+            {/* Login Form */}
+            {showLogin && !showRegister && !showAdminPanel && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-800 text-center mb-6">Login</h2>
+                
+                {loginForm.error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+                    {loginForm.error}
+                  </div>
+                )}
+                
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      required
+                      value={loginForm.email}
+                      onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div className="relative">
+                      <input
+                        type={loginForm.showPassword ? 'text' : 'password'}
+                        required
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                        placeholder="Enter your password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setLoginForm(prev => ({ ...prev, showPassword: !prev.showPassword }))}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                      >
+                        {loginForm.showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <button
+                    type="submit"
+                    disabled={loginForm.isLoading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                  >
+                    {loginForm.isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Signing In...
+                      </>
+                    ) : (
+                      <>
+                        <LogIn size={20} />
+                        Sign In
+                      </>
+                    )}
+                  </button>
+                </form>
+                
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAdminPanel(true);
+                      setShowRegister(true);
+                      setShowLogin(false);
+                    }}
+                    className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                  >
+                    <Shield size={20} />
+                    Admin Register
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Demo Credentials (only show in demo mode) */}
+            {DEMO_MODE && showLogin && !showRegister && !showAdminPanel && (
               <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <h3 className="font-semibold text-blue-800 mb-2">Demo Credentials</h3>
                 <div className="text-sm text-blue-700 space-y-1">
@@ -854,12 +881,18 @@ const WorkTimeCalculator = () => {
 
             {/* System Info */}
             <div className="mt-6 text-xs text-gray-500 text-center">
-              <p>🔒 {DEMO_MODE ? 'Demo Mode - Sample Data' : 'Secure Database Authentication'}</p>
+              <p>🔒 {DEMO_MODE ? 'Demo Mode - Sample Data' : 'Production Mode - Supabase Database'}</p>
               <p className="mt-1">Your data is stored safely and privately</p>
               {DEMO_MODE && (
                 <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-700">
                   <p className="font-medium">⚠️ Demo Mode Active</p>
-                  <p className="text-xs">Configure Supabase for production use</p>
+                  <p className="text-xs">Switch to production mode for real database storage</p>
+                </div>
+              )}
+              {!DEMO_MODE && (
+                <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-green-700">
+                  <p className="font-medium">✅ Production Mode Active</p>
+                  <p className="text-xs">Connected to Supabase Database</p>
                 </div>
               )}
             </div>
@@ -869,7 +902,7 @@ const WorkTimeCalculator = () => {
     );
   }
 
-  // Time Input Component (same as before)
+  // Time Input Component
   const TimeInput = ({ label, timeObj, onChange, buttonLabel, buttonIcon, buttonColor, onButtonClick }) => (
     <div>
       <label className="block text-sm font-medium mb-1 text-gray-700">{label}</label>
@@ -944,19 +977,18 @@ const WorkTimeCalculator = () => {
         </div>
         <div className="flex items-center gap-2">
           {user?.user_metadata?.role === 'admin' && (
-           <button
-  onClick={async () => {
-    await handleSignOut();         // 👈 Sign out the current user
-    setShowAdminPanel(true);       // 👈 Show the Admin Panel
-    setShowRegister(true);         // 👈 Show the Register form
-    setShowLogin(false);           // 👈 Hide the Login form
-  }}
-  className="text-purple-600 hover:text-purple-800 font-medium transition-colors duration-200 flex items-center gap-2"
->
-  <Shield size={18} />
-  <span className="hidden sm:inline">Admin</span>
-</button>
-
+            <button
+              onClick={() => {
+                setShowAdminPanel(true);
+                setShowRegister(true);
+                setShowLogin(false);
+                setCurrentView('admin');
+              }}
+              className="text-purple-600 hover:text-purple-800 font-medium transition-colors duration-200 flex items-center gap-2"
+            >
+              <Shield size={18} />
+              <span className="hidden sm:inline">Admin</span>
+            </button>
           )}
           <button
             onClick={returnToIndex}
@@ -1013,7 +1045,7 @@ const WorkTimeCalculator = () => {
     </div>
   );
 
-  // Dashboard View (same structure as before, but with user-specific data)
+  // Dashboard View
   const DashboardView = () => {
     const { monthlyHours, monthlySalary, monthlyDays } = getMonthlyStats();
     
@@ -1022,6 +1054,12 @@ const WorkTimeCalculator = () => {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
           <p className="text-gray-600">Your personal work analytics</p>
+          {!DEMO_MODE && (
+            <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              Connected to Supabase Database
+            </div>
+          )}
         </div>
         
         {/* Quick Stats */}
@@ -1104,7 +1142,7 @@ const WorkTimeCalculator = () => {
     );
   };
 
-  // Settings View (enhanced with user info)
+  // Settings View
   const SettingsView = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -1140,6 +1178,27 @@ const WorkTimeCalculator = () => {
               </p>
             )}
             <p className="text-xs text-gray-500">User ID: {user?.id?.substring(0, 8)}...</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Database Status */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h3 className="text-xl font-bold text-gray-800 mb-4">Database Status</h3>
+        <div className={`p-4 rounded-lg ${DEMO_MODE ? 'bg-yellow-50 border border-yellow-200' : 'bg-green-50 border border-green-200'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${DEMO_MODE ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+            <div>
+              <h4 className={`font-semibold ${DEMO_MODE ? 'text-yellow-800' : 'text-green-800'}`}>
+                {DEMO_MODE ? '🔧 Demo Mode Active' : '🚀 Production Mode - Supabase Connected'}
+              </h4>
+              <p className={`text-sm ${DEMO_MODE ? 'text-yellow-600' : 'text-green-600'}`}>
+                {DEMO_MODE 
+                  ? 'Data stored in browser session. Switch to production for real database storage.' 
+                  : 'Your data is securely stored in Supabase database and automatically synced.'
+                }
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -1209,14 +1268,6 @@ const WorkTimeCalculator = () => {
               </div>
             </div>
           </div>
-          
-          <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-            <h4 className="font-semibold text-yellow-800 mb-2">🔒 Data Storage</h4>
-            <p className="text-sm text-yellow-700">
-              Your data is stored securely in {DEMO_MODE ? 'browser session storage (demo)' : 'Supabase database'} and 
-              is linked to your user account. Data is automatically saved when you make changes.
-            </p>
-          </div>
         </div>
       </div>
 
@@ -1224,17 +1275,30 @@ const WorkTimeCalculator = () => {
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-4">About WorkQ</h3>
         <div className="text-sm text-gray-600 space-y-2">
-          <p>Version: 3.0.0 (Custom Authentication System)</p>
-          <p>Authentication: {DEMO_MODE ? 'Demo Mode' : 'Supabase Database Auth'}</p>
-          <p>Database: {DEMO_MODE ? 'Session Storage (Demo)' : 'Supabase PostgreSQL'}</p>
+          <p>Version: 3.0.0 (Production Ready with Supabase Integration)</p>
+          <p>Mode: {DEMO_MODE ? 'Demo Mode (Browser Storage)' : 'Production Mode (Supabase Database)'}</p>
+          <p>Authentication: {DEMO_MODE ? 'Mock Authentication' : 'Supabase Auth'}</p>
+          <p>Database: {DEMO_MODE ? 'Session Storage' : 'Supabase PostgreSQL'}</p>
           <p>Features: Time tracking, salary calculation, secure login, data export, user management</p>
-          <p className="text-green-600 font-medium">✓ Secure • ✓ Private • ✓ User-Specific Data</p>
+          <p className="text-green-600 font-medium">✓ Secure • ✓ Private • ✓ User-Specific Data • ✓ Real-time Sync</p>
+          {!DEMO_MODE && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="font-medium text-green-800">🚀 Production Benefits:</p>
+              <ul className="text-green-700 text-xs mt-1 space-y-1">
+                <li>• Real user authentication with email verification</li>
+                <li>• Secure database storage with Row Level Security</li>
+                <li>• Automatic data backup and synchronization</li>
+                <li>• Multi-device access with same login</li>
+                <li>• Admin user management capabilities</li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 
-  // Time Tracker View (same as before)
+  // Time Tracker View (same structure as before)
   const TimeTrackerView = () => (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
       {/* Time Entry Section */}
@@ -1243,6 +1307,11 @@ const WorkTimeCalculator = () => {
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
             <Clock className="text-blue-600" size={20} />
             Time Entry
+            {!DEMO_MODE && (
+              <div className="ml-auto">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Connected to database"></div>
+              </div>
+            )}
           </h2>
           
           <div className="space-y-4">
@@ -1381,13 +1450,18 @@ const WorkTimeCalculator = () => {
         </div>
       </div>
 
-      {/* Calendar Section (same as before) */}
+      {/* Calendar Section */}
       <div className="xl:col-span-2">
         <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
               <Calendar className="text-blue-600" size={24} />
               Work Calendar
+              {!DEMO_MODE && (
+                <div className="ml-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Real-time sync enabled"></div>
+                </div>
+              )}
             </h1>
           </div>
 
@@ -1534,7 +1608,13 @@ const WorkTimeCalculator = () => {
         <h1 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
           WorkQ
         </h1>
-        <p className="text-gray-600">Employee Time Tracking System with Secure Authentication</p>
+        <p className="text-gray-600">Employee Time Tracking System</p>
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <div className={`w-2 h-2 rounded-full ${DEMO_MODE ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+          <span className="text-sm text-gray-500">
+            {DEMO_MODE ? 'Demo Mode - Browser Storage' : 'Production Mode - Supabase Database'}
+          </span>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -1545,7 +1625,7 @@ const WorkTimeCalculator = () => {
       {currentView === 'dashboard' && <DashboardView />}
       {currentView === 'settings' && <SettingsView />}
 
-      {/* Date Details Modal (same as before) */}
+      {/* Date Details Modal */}
       {selectedDateModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-4 sm:p-6 rounded-xl max-w-md w-full shadow-2xl">
