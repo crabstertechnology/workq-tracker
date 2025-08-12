@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/workq/static/css/main.0c9e6609.css",
-    "main.js": "/workq/static/js/main.7e90c122.js",
+    "main.css": "/workq/static/css/main.2b34f5e4.css",
+    "main.js": "/workq/static/js/main.d65fcd5b.js",
     "index.html": "/workq/index.html",
-    "main.0c9e6609.css.map": "/workq/static/css/main.0c9e6609.css.map",
-    "main.7e90c122.js.map": "/workq/static/js/main.7e90c122.js.map"
+    "main.2b34f5e4.css.map": "/workq/static/css/main.2b34f5e4.css.map",
+    "main.d65fcd5b.js.map": "/workq/static/js/main.d65fcd5b.js.map"
   },
   "entrypoints": [
-    "static/css/main.0c9e6609.css",
-    "static/js/main.7e90c122.js"
+    "static/css/main.2b34f5e4.css",
+    "static/js/main.d65fcd5b.js"
   ]
 }
