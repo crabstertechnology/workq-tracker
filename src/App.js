@@ -567,30 +567,35 @@ const WorkQ = () => {
     }
   };
 
-  // Calendar Functions - Updated to handle date clicks
-  const handleDateClick = (day) => {
-    if (!day) return;
-    
-    const dateStr = formatDate(day);
-    setSelectedDate(dateStr);
-    
-    const { timeEntry, leaveRequest } = getDateData(dateStr);
-    
-    // Show options for the clicked date
-    const hasEntry = timeEntry || leaveRequest;
-    
-    if (hasEntry) {
-      // Show edit options
-      if (timeEntry) {
-        openDateModal(dateStr, 'edit', timeEntry);
-      } else if (leaveRequest) {
-        openDateModal(dateStr, 'leave');
-      }
-    } else {
-      // Show add options - let user choose between time entry or leave
-      openDateModal(dateStr, 'edit');
+  // Replace the handleDateClick function with this corrected version:
+const handleDateClick = (day) => {
+  if (!day) return;
+  
+  // Create date string directly without timezone conversion
+  const year = currentDate.getFullYear();
+  const month = (currentDate.getMonth() + 1).toString().padStart(2, '0'); // Add 1 and pad
+  const dayStr = day.toString().padStart(2, '0'); // Pad with zero
+  const dateStr = `${year}-${month}-${dayStr}`;
+  
+  setSelectedDate(dateStr);
+  
+  const { timeEntry, leaveRequest } = getDateData(dateStr);
+  
+  // Show options for the clicked date
+  const hasEntry = timeEntry || leaveRequest;
+  
+  if (hasEntry) {
+    // Show edit options
+    if (timeEntry) {
+      openDateModal(dateStr, 'edit', timeEntry);
+    } else if (leaveRequest) {
+      openDateModal(dateStr, 'leave');
     }
-  };
+  } else {
+    // Show add options - let user choose between time entry or leave
+    openDateModal(dateStr, 'edit');
+  }
+};
 
   // Utility Functions
   const getCurrentTime = () => {
@@ -639,12 +644,15 @@ const WorkQ = () => {
     return days;
   };
 
-  const formatDate = (day) => {
-    if (!day) return '';
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    return new Date(year, month, day).toISOString().split('T')[0];
-  };
+  // Also replace the formatDate function with this corrected version:
+const formatDate = (day) => {
+  if (!day) return '';
+  const year = currentDate.getFullYear();
+  const month = (currentDate.getMonth() + 1).toString().padStart(2, '0'); // Add 1 and pad
+  const dayStr = day.toString().padStart(2, '0'); // Pad with zero
+  return `${year}-${month}-${dayStr}`;
+};
+
 
   const getDateData = (dateStr) => {
     const timeEntry = timeEntries.find(entry => entry.work_date === dateStr);
@@ -909,80 +917,472 @@ const WorkQ = () => {
 
   // Main App Interface
   return (
-    <div className="max-w-7xl mx-auto p-4 bg-gray-50 min-h-screen">
-      {/* Notification */}
-      {notification.show && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center gap-2 ${
-          notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-        }`}>
-          {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
-          {notification.message}
-        </div>
-      )}
+    <>
+      <style jsx>{`
+        /* Mobile First - Base Styles */
+        .workq-container {
+          max-width: 100%;
+          margin: 0 auto;
+          padding: 1rem;
+          background-color: #f9fafb;
+          min-height: 100vh;
+        }
+        
+        .workq-grid {
+          display: grid;
+          gap: 1.5rem;
+        }
+        
+        .workq-grid-timetracker {
+          grid-template-columns: 1fr;
+        }
+        
+        .workq-card {
+          background: white;
+          border-radius: 0.75rem;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+          padding: 1.5rem;
+        }
+        
+        .workq-header-nav {
+          display: flex;
+          gap: 0.5rem;
+          overflow-x: auto;
+          padding-bottom: 0.5rem;
+        }
+        
+        .workq-nav-btn {
+          padding: 0.5rem 1rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        
+        .workq-calendar-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+        }
+        
+        .workq-calendar-day {
+          min-height: 80px;
+          padding: 0.5rem;
+          border-right: 1px solid #e5e7eb;
+          border-bottom: 1px solid #e5e7eb;
+          position: relative;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        
+        .workq-profile-section {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+        
+        .workq-profile-info {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        
+        .workq-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 1rem;
+        }
+        
+        .workq-form-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 0.5rem;
+        }
+        
+        /* Tablet Styles */
+        @media (min-width: 640px) {
+          .workq-container {
+            padding: 1.5rem;
+          }
+          
+          .workq-calendar-day {
+            min-height: 100px;
+            padding: 0.75rem;
+          }
+          
+          .workq-stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+          
+          .workq-profile-section {
+            flex-wrap: nowrap;
+          }
+        }
+        
+        /* Desktop Styles */
+        @media (min-width: 1024px) {
+          .workq-container {
+            max-width: 112rem;
+            padding: 2rem;
+          }
+          
+          .workq-grid-timetracker {
+            grid-template-columns: 1fr 2fr;
+          }
+          
+          .workq-calendar-day {
+            min-height: 120px;
+            padding: 1rem;
+          }
+          
+          .workq-nav-btn {
+            padding: 0.75rem 1.5rem;
+          }
+        }
+        
+        /* Large Desktop */
+        @media (min-width: 1280px) {
+          .workq-grid-timetracker {
+            grid-template-columns: 1fr 2fr;
+          }
+        }
+        
+        /* Modal Responsive */
+        @media (max-width: 640px) {
+          .workq-modal {
+            margin: 1rem;
+            max-width: none;
+            width: auto;
+          }
+        }
+        
+        /* Form Responsive */
+        @media (max-width: 768px) {
+          .workq-form-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+      
+      <div className="workq-container">
+        {/* Notification */}
+        {notification.show && (
+          <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center gap-2 ${
+            notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+          }`}>
+            {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
+            {notification.message}
+          </div>
+        )}
 
-      {/* Date Modal */}
-      {showDateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-800">
-                {modalType === 'leave' ? 'Mark as Leave' : 'Edit Time Entry'}
-              </h3>
-              <button
-                onClick={() => setShowDateModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">
-                Date: {new Date(modalDate).toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {/* Action Type Selector */}
-              <div className="flex gap-2">
+        {/* Date Modal */}
+        {showDateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="workq-modal bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-800">
+                  {modalType === 'leave' ? 'Mark as Leave' : 'Edit Time Entry'}
+                </h3>
                 <button
-                  onClick={() => setModalType('edit')}
-                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                    modalType === 'edit' 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  onClick={() => setShowDateModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
                 >
-                  <Edit size={16} className="inline mr-2" />
-                  Time Entry
-                </button>
-                <button
-                  onClick={() => setModalType('leave')}
-                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                    modalType === 'leave' 
-                      ? 'bg-orange-600 text-white' 
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <Coffee size={16} className="inline mr-2" />
-                  Leave
+                  <X size={24} />
                 </button>
               </div>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  Date: {new Date(modalDate).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </p>
+              </div>
 
-              {modalType === 'edit' ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-4">
+                {/* Action Type Selector */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setModalType('edit')}
+                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                      modalType === 'edit' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Edit size={16} className="inline mr-2" />
+                    Time Entry
+                  </button>
+                  <button
+                    onClick={() => setModalType('leave')}
+                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                      modalType === 'leave' 
+                        ? 'bg-orange-600 text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Coffee size={16} className="inline mr-2" />
+                    Leave
+                  </button>
+                </div>
+
+                {modalType === 'edit' ? (
+                  <>
+                    <div className="workq-form-grid">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Clock In</label>
+                        <input
+                          type="time"
+                          value={modalForm.clockIn}
+                          onChange={(e) => setModalForm(prev => ({ ...prev, clockIn: e.target.value }))}
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Clock Out</label>
+                        <input
+                          type="time"
+                          value={modalForm.clockOut}
+                          onChange={(e) => setModalForm(prev => ({ ...prev, clockOut: e.target.value }))}
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Break Duration (minutes)</label>
+                      <input
+                        type="number"
+                        value={modalForm.breakDuration}
+                        onChange={(e) => setModalForm(prev => ({ ...prev, breakDuration: parseInt(e.target.value) || 0 }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="0"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                      <textarea
+                        value={modalForm.notes}
+                        onChange={(e) => setModalForm(prev => ({ ...prev, notes: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows="2"
+                        placeholder="Optional notes..."
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Leave Type</label>
+                      <select
+                        value={modalForm.leaveType}
+                        onChange={(e) => setModalForm(prev => ({ ...prev, leaveType: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="personal">Personal Leave</option>
+                        <option value="sick">Sick Leave</option>
+                        <option value="vacation">Vacation</option>
+                        <option value="emergency">Emergency Leave</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+                      <textarea
+                        value={modalForm.leaveReason}
+                        onChange={(e) => setModalForm(prev => ({ ...prev, leaveReason: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows="3"
+                        placeholder="Reason for leave (optional)..."
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-2 pt-4">
+                  <button
+                    onClick={() => setShowDateModal(false)}
+                    className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleModalSave}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Save size={18} />
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            WorkQ
+          </h1>
+          <p className="text-gray-600">Employee Time Tracking System</p>
+        </div>
+
+        {/* Navigation */}
+        <div className="workq-card mb-6">
+          <div className="workq-profile-section">
+            <div className="workq-profile-info">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                {userProfile?.full_name?.charAt(0) || 'U'}
+              </div>
+              <div>
+                <h2 className="font-semibold text-gray-800">{userProfile?.full_name}</h2>
+                <p className="text-sm text-gray-500">{userProfile?.email}</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-green-600">
+                    {userProfile?.role === 'admin' ? 'Administrator' : 'Employee'} 
+                    {userProfile?.employee_id && ` • ${userProfile.employee_id}`}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="text-red-600 hover:text-red-800 font-medium transition-colors duration-200 flex items-center gap-2"
+            >
+              <LogOut size={18} />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
+          
+          <div className="workq-header-nav">
+            <button
+              onClick={() => setCurrentView('timetracker')}
+              className={`workq-nav-btn ${
+                currentView === 'timetracker' 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Clock size={18} />
+              Time Tracker
+            </button>
+            <button
+              onClick={() => setCurrentView('dashboard')}
+              className={`workq-nav-btn ${
+                currentView === 'dashboard' 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <BarChart3 size={18} />
+              Dashboard
+            </button>
+            <button
+              onClick={() => setCurrentView('settings')}
+              className={`workq-nav-btn ${
+                currentView === 'settings' 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Settings size={18} />
+              Settings
+            </button>
+          </div>
+        </div>
+
+        {/* Time Tracker View */}
+        {currentView === 'timetracker' && (
+          <div className="workq-grid workq-grid-timetracker">
+            {/* Quick Actions */}
+            <div>
+              <div className="workq-card mb-6">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <Clock className="text-blue-600" size={20} />
+                  Quick Clock In/Out
+                </h2>
+                
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-600">Current Time</div>
+                    <div className="text-xl font-bold text-gray-800">{getCurrentTime()}</div>
+                    <div className="text-sm text-gray-500">{new Date().toLocaleDateString()}</div>
+                  </div>
+                  
+                  {todayEntry ? (
+                    <div className="space-y-3">
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                        <div className="text-sm text-green-700 font-medium">Today's Entry</div>
+                        <div className="text-sm text-green-600">
+                          In: {todayEntry.clock_in_time || 'Not clocked in'}<br/>
+                          Out: {todayEntry.clock_out_time || 'Not clocked out'}<br/>
+                          Hours: {todayEntry.total_hours?.toFixed(1) || '0'} hrs
+                        </div>
+                      </div>
+                      
+                      <div className="workq-form-grid">
+                        <button
+                          onClick={handleClockIn}
+                          className="bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <LogIn size={16} />
+                          Update In
+                        </button>
+                        <button
+                          onClick={handleClockOut}
+                          disabled={!todayEntry.clock_in_time}
+                          className="bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <LogOut size={16} />
+                          Clock Out
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleClockIn}
+                      className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-lg font-medium"
+                    >
+                      <LogIn size={20} />
+                      Clock In Now
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Manual Time Entry */}
+              <div className="workq-card">
+                <h3 className="text-lg font-bold text-gray-800 mb-4">Manual Time Entry</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div className="workq-form-grid">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Clock In</label>
                       <input
                         type="time"
-                        value={modalForm.clockIn}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, clockIn: e.target.value }))}
+                        value={timeForm.clockIn}
+                        onChange={(e) => setTimeForm(prev => ({ ...prev, clockIn: e.target.value }))}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -990,8 +1390,8 @@ const WorkQ = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Clock Out</label>
                       <input
                         type="time"
-                        value={modalForm.clockOut}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, clockOut: e.target.value }))}
+                        value={timeForm.clockOut}
+                        onChange={(e) => setTimeForm(prev => ({ ...prev, clockOut: e.target.value }))}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -1001,8 +1401,8 @@ const WorkQ = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Break Duration (minutes)</label>
                     <input
                       type="number"
-                      value={modalForm.breakDuration}
-                      onChange={(e) => setModalForm(prev => ({ ...prev, breakDuration: parseInt(e.target.value) || 0 }))}
+                      value={timeForm.breakDuration}
+                      onChange={(e) => setTimeForm(prev => ({ ...prev, breakDuration: parseInt(e.target.value) || 0 }))}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                     />
@@ -1011,786 +1411,552 @@ const WorkQ = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                     <textarea
-                      value={modalForm.notes}
-                      onChange={(e) => setModalForm(prev => ({ ...prev, notes: e.target.value }))}
+                      value={timeForm.notes}
+                      onChange={(e) => setTimeForm(prev => ({ ...prev, notes: e.target.value }))}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       rows="2"
                       placeholder="Optional notes..."
                     />
                   </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Leave Type</label>
-                    <select
-                      value={modalForm.leaveType}
-                      onChange={(e) => setModalForm(prev => ({ ...prev, leaveType: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="personal">Personal Leave</option>
-                      <option value="sick">Sick Leave</option>
-                      <option value="vacation">Vacation</option>
-                      <option value="emergency">Emergency Leave</option>
-                    </select>
-                  </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
-                    <textarea
-                      value={modalForm.leaveReason}
-                      onChange={(e) => setModalForm(prev => ({ ...prev, leaveReason: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      rows="3"
-                      placeholder="Reason for leave (optional)..."
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-2 pt-4">
-                <button
-                  onClick={() => setShowDateModal(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-400 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleModalSave}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Save size={18} />
-                  Save
-                </button>
+                  <button
+                    onClick={handleManualTimeEntry}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Save size={18} />
+                    Save Time Entry
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-          WorkQ
-        </h1>
-        <p className="text-gray-600">Employee Time Tracking System</p>
-      </div>
-
-      {/* Navigation */}
-      <div className="bg-white shadow-lg rounded-xl p-4 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-              {userProfile?.full_name?.charAt(0) || 'U'}
-            </div>
+            {/* Calendar */}
             <div>
-              <h2 className="font-semibold text-gray-800">{userProfile?.full_name}</h2>
-              <p className="text-sm text-gray-500">{userProfile?.email}</p>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-xs text-green-600">
-                  {userProfile?.role === 'admin' ? 'Administrator' : 'Employee'} 
-                  {userProfile?.employee_id && ` • ${userProfile.employee_id}`}
-                </span>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={handleSignOut}
-            className="text-red-600 hover:text-red-800 font-medium transition-colors duration-200 flex items-center gap-2"
-          >
-            <LogOut size={18} />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
-        </div>
-        
-        <div className="flex gap-2 overflow-x-auto">
-          <button
-            onClick={() => setCurrentView('timetracker')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-              currentView === 'timetracker' 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            <Clock size={18} />
-            Time Tracker
-          </button>
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-              currentView === 'dashboard' 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            <BarChart3 size={18} />
-            Dashboard
-          </button>
-          <button
-            onClick={() => setCurrentView('settings')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-              currentView === 'settings' 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            <Settings size={18} />
-            Settings
-          </button>
-        </div>
-      </div>
-
-      {/* Time Tracker View */}
-      {currentView === 'timetracker' && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Quick Actions */}
-          <div className="xl:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
-                <Clock className="text-blue-600" size={20} />
-                Quick Clock In/Out
-              </h2>
-              
-              <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-600">Current Time</div>
-                  <div className="text-xl font-bold text-gray-800">{getCurrentTime()}</div>
-                  <div className="text-sm text-gray-500">{new Date().toLocaleDateString()}</div>
+              <div className="workq-card">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <Calendar className="text-blue-600" size={24} />
+                    Work Calendar - Click any date to edit
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
+                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                    >
+                      ← Previous
+                    </button>
+                    <h3 className="text-lg font-semibold min-w-[200px] text-center">
+                      {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
+                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                    >
+                      Next →
+                    </button>
+                  </div>
                 </div>
-                
-                {todayEntry ? (
-                  <div className="space-y-3">
-                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                      <div className="text-sm text-green-700 font-medium">Today's Entry</div>
-                      <div className="text-sm text-green-600">
-                        In: {todayEntry.clock_in_time || 'Not clocked in'}<br/>
-                        Out: {todayEntry.clock_out_time || 'Not clocked out'}<br/>
-                        Hours: {todayEntry.total_hours?.toFixed(1) || '0'} hrs
+
+                <div className="border rounded-lg overflow-hidden">
+                  {/* Calendar Header */}
+                  <div className="workq-calendar-grid bg-gray-100">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                      <div key={day} className="p-3 text-center font-semibold text-gray-700">
+                        {day}
                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={handleClockIn}
-                        className="bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <LogIn size={16} />
-                        Update In
-                      </button>
-                      <button
-                        onClick={handleClockOut}
-                        disabled={!todayEntry.clock_in_time}
-                        className="bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        <LogOut size={16} />
-                        Clock Out
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                ) : (
-                  <button
-                    onClick={handleClockIn}
-                    className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-lg font-medium"
-                  >
-                    <LogIn size={20} />
-                    Clock In Now
-                  </button>
-                )}
-              </div>
-            </div>
 
-            {/* Manual Time Entry */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">Manual Time Entry</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Clock In</label>
-                    <input
-                      type="time"
-                      value={timeForm.clockIn}
-                      onChange={(e) => setTimeForm(prev => ({ ...prev, clockIn: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Clock Out</label>
-                    <input
-                      type="time"
-                      value={timeForm.clockOut}
-                      onChange={(e) => setTimeForm(prev => ({ ...prev, clockOut: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Break Duration (minutes)</label>
-                  <input
-                    type="number"
-                    value={timeForm.breakDuration}
-                    onChange={(e) => setTimeForm(prev => ({ ...prev, breakDuration: parseInt(e.target.value) || 0 }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    min="0"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                  <textarea
-                    value={timeForm.notes}
-                    onChange={(e) => setTimeForm(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows="2"
-                    placeholder="Optional notes..."
-                  />
-                </div>
-                
-                <button
-                  onClick={handleManualTimeEntry}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Save size={18} />
-                  Save Time Entry
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Calendar */}
-          <div className="xl:col-span-2">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Calendar className="text-blue-600" size={24} />
-                  Work Calendar - Click any date to edit
-                </h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
-                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    ← Previous
-                  </button>
-                  <h3 className="text-lg font-semibold min-w-[200px] text-center">
-                    {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </h3>
-                  <button
-                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
-                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-
-              <div className="border rounded-lg overflow-hidden">
-                {/* Calendar Header */}
-                <div className="grid grid-cols-7 bg-gray-100">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                    <div key={day} className="p-3 text-center font-semibold text-gray-700">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Calendar Grid */}
-                <div className="grid grid-cols-7">
-                  {getDaysInMonth().map((day, index) => {
-                    const dateStr = formatDate(day);
-                    const { timeEntry, leaveRequest } = getDateData(dateStr);
-                    const isToday = day && dateStr === new Date().toISOString().split('T')[0];
-                    const isSelected = day && dateStr === selectedDate;
-                    
-                    return (
-                      <div
-                        key={index}
-                        onClick={() => handleDateClick(day)}
-                        className={`min-h-[120px] p-2 border-r border-b relative cursor-pointer hover:bg-gray-50 transition-colors ${
-                          isToday ? 'bg-blue-50 border-blue-200' : ''
-                        } ${isSelected ? 'bg-purple-50 border-purple-200' : ''} ${
-                          leaveRequest ? 'bg-red-50' : ''
-                        } ${timeEntry ? 'bg-green-50' : ''}`}
-                      >
-                        {day && (
-                          <>
-                            <div className={`font-bold mb-2 ${
-                              isToday ? 'text-blue-600 bg-blue-100 w-6 h-6 rounded-full flex items-center justify-center text-sm' : 
-                              isSelected ? 'text-purple-600 bg-purple-100 w-6 h-6 rounded-full flex items-center justify-center text-sm' :
-                              timeEntry ? 'text-green-700' : 
-                              leaveRequest ? 'text-red-700' : 'text-gray-700'
-                            }`}>
-                              {day}
-                            </div>
-                            
-                            {timeEntry && (
-                              <div className="space-y-1">
-                                <div className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
-                                  {timeEntry.total_hours?.toFixed(1) || '0'}h
-                                </div>
-                                <div className="text-xs text-green-700">
-                                  {formatCurrency((timeEntry.total_hours || 0) * (userProfile?.hourly_rate || 0))}
-                                </div>
-                                {timeEntry.clock_in_time && (
-                                  <div className="text-xs text-gray-600">
-                                    {timeEntry.clock_in_time}-{timeEntry.clock_out_time || '...'}
-                                  </div>
-                                )}
+{/* // Replace the calendar grid section with this logic */}
+<div className="workq-calendar-grid">
+  {getDaysInMonth().map((day, index) => {
+    const dateStr = formatDate(day);
+    const { timeEntry, leaveRequest } = getDateData(dateStr);
+    
+    // Fix today's date comparison
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    const isToday = day && dateStr === todayStr;
+    const isSelected = day && dateStr === selectedDate;
+    
+    return (
+      <div
+        key={index}
+        onClick={() => handleDateClick(day)}
+        className={`workq-calendar-day hover:bg-gray-50 transition-colors ${
+          isToday ? 'bg-blue-50 border-blue-200' : ''
+        } ${isSelected ? 'bg-purple-50 border-purple-200' : ''} ${
+          leaveRequest ? 'bg-red-50' : ''
+        } ${timeEntry ? 'bg-green-50' : ''}`}
+      >
+                          {day && (
+                            <>
+                              <div className={`font-bold mb-2 ${
+                                isToday ? 'text-blue-600 bg-blue-100 w-6 h-6 rounded-full flex items-center justify-center text-sm' : 
+                                isSelected ? 'text-purple-600 bg-purple-100 w-6 h-6 rounded-full flex items-center justify-center text-sm' :
+                                timeEntry ? 'text-green-700' : 
+                                leaveRequest ? 'text-red-700' : 'text-gray-700'
+                              }`}>
+                                {day}
                               </div>
-                            )}
-                            
-                            {leaveRequest && (
-                              <div className="space-y-1">
-                                <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium">
-                                  {leaveRequest.leave_type}
+                              
+                              {timeEntry && (
+                                <div className="space-y-1">
+                                  <div className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
+                                    {timeEntry.total_hours?.toFixed(1) || '0'}h
+                                  </div>
+                                  <div className="text-xs text-green-700">
+                                    {formatCurrency((timeEntry.total_hours || 0) * (userProfile?.hourly_rate || 0))}
+                                  </div>
+                                  {timeEntry.clock_in_time && (
+                                    <div className="text-xs text-gray-600">
+                                      {timeEntry.clock_in_time}-{timeEntry.clock_out_time || '...'}
+                                    </div>
+                                  )}
                                 </div>
+                              )}
+                              
+                              {leaveRequest && (
+                                <div className="space-y-1">
+                                  <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium">
+                                    {leaveRequest.leave_type}
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteLeaveRequest(leaveRequest.id);
+                                    }}
+                                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                    title="Delete leave request"
+                                  >
+                                    <Trash2 size={10} />
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {timeEntry && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteLeaveRequest(leaveRequest.id);
+                                    handleDeleteTimeEntry(timeEntry.id);
                                   }}
-                                  className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                                  title="Delete leave request"
+                                  className="absolute bottom-1 right-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                  title="Delete entry"
                                 >
                                   <Trash2 size={10} />
                                 </button>
+                              )}
+                              
+                              {/* Click indicator */}
+                              <div className="absolute top-1 left-1 opacity-0 hover:opacity-100 transition-opacity">
+                                <div className="text-xs bg-blue-500 text-white px-1 rounded">
+                                  Click to edit
+                                </div>
                               </div>
-                            )}
-                            
-                            {timeEntry && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteTimeEntry(timeEntry.id);
-                                }}
-                                className="absolute bottom-1 right-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                                title="Delete entry"
-                              >
-                                <Trash2 size={10} />
-                              </button>
-                            )}
-                            
-                            {/* Click indicator */}
-                            <div className="absolute top-1 left-1 opacity-0 hover:opacity-100 transition-opacity">
-                              <div className="text-xs bg-blue-500 text-white px-1 rounded">
-                                Click to edit
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Dashboard View */}
-      {currentView === 'dashboard' && (
-        <div className="space-y-6">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
-            <p className="text-gray-600">Your work analytics and statistics</p>
-          </div>
-          
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <div className="text-sm text-blue-600 font-semibold">Total Hours</div>
-              <div className="text-2xl font-bold text-blue-800">{calculateTotalHours().toFixed(1)}h</div>
+        {/* Dashboard View */}
+        {currentView === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
+              <p className="text-gray-600">Your work analytics and statistics</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <div className="text-sm text-green-600 font-semibold">Total Earnings</div>
-              <div className="text-2xl font-bold text-green-800">{formatCurrency(calculateTotalEarnings())}</div>
+            
+            {/* Stats Grid */}
+            <div className="workq-stats-grid">
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="text-sm text-blue-600 font-semibold">Total Hours</div>
+                <div className="text-2xl font-bold text-blue-800">{calculateTotalHours().toFixed(1)}h</div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <div className="text-sm text-green-600 font-semibold">Total Earnings</div>
+                <div className="text-2xl font-bold text-green-800">{formatCurrency(calculateTotalEarnings())}</div>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <div className="text-sm text-purple-600 font-semibold">Working Days</div>
+                <div className="text-2xl font-bold text-purple-800">{getWorkingDays()}</div>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <div className="text-sm text-orange-600 font-semibold">Leave Days</div>
+                <div className="text-2xl font-bold text-orange-800">{getLeaveDays()}</div>
+              </div>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-              <div className="text-sm text-purple-600 font-semibold">Working Days</div>
-              <div className="text-2xl font-bold text-purple-800">{getWorkingDays()}</div>
-            </div>
-            <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-              <div className="text-sm text-orange-600 font-semibold">Leave Days</div>
-              <div className="text-2xl font-bold text-orange-800">{getLeaveDays()}</div>
-            </div>
-          </div>
 
-          {/* Recent Entries */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Time Entries</h3>
-            <div className="space-y-3">
-              {timeEntries.slice(0, 10).map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            {/* Recent Entries */}
+            <div className="workq-card">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Time Entries</h3>
+              <div className="space-y-3">
+                {timeEntries.slice(0, 10).map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-800">
+                        {new Date(entry.work_date).toLocaleDateString('en-US', { 
+                          weekday: 'short', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {entry.clock_in_time} - {entry.clock_out_time || 'Not clocked out'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-gray-800">{entry.total_hours?.toFixed(1) || '0'}h</p>
+                      <p className="text-sm text-green-600">
+                        {formatCurrency((entry.total_hours || 0) * (userProfile?.hourly_rate || 0))}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {timeEntries.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="mx-auto mb-2" size={48} />
+                    <p>No time entries yet. Start tracking your work!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings View */}
+        {currentView === 'settings' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
+              <p className="text-gray-600">Manage your profile and preferences</p>
+            </div>
+            
+            {/* Profile Settings */}
+            <div className="workq-card">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <User size={24} />
+                Profile Information
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
                   <div>
-                    <p className="font-medium text-gray-800">
-                      {new Date(entry.work_date).toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {entry.clock_in_time} - {entry.clock_out_time || 'Not clocked out'}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={userProfile?.full_name || ''}
+                      onChange={(e) => setUserProfile(prev => ({ ...prev, full_name: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-800">{entry.total_hours?.toFixed(1) || '0'}h</p>
-                    <p className="text-sm text-green-600">
-                      {formatCurrency((entry.total_hours || 0) * (userProfile?.hourly_rate || 0))}
-                    </p>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                    <input
+                      type="text"
+                      value={userProfile?.employee_id || ''}
+                      readOnly
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                    />
                   </div>
-                </div>
-              ))}
-              {timeEntries.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="mx-auto mb-2" size={48} />
-                  <p>No time entries yet. Start tracking your work!</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Settings View */}
-      {currentView === 'settings' && (
-        <div className="space-y-6">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
-            <p className="text-gray-600">Manage your profile and preferences</p>
-          </div>
-          
-          {/* Profile Settings */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <User size={24} />
-              Profile Information
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={userProfile?.full_name || ''}
-                    onChange={(e) => setUserProfile(prev => ({ ...prev, full_name: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={userProfile?.email || ''}
+                      readOnly
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                    />
+                  </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                  <input
-                    type="text"
-                    value={userProfile?.employee_id || ''}
-                    readOnly
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={userProfile?.email || ''}
-                    readOnly
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={userProfile?.hourly_rate || 0}
+                      onChange={(e) => setUserProfile(prev => ({ ...prev, hourly_rate: parseFloat(e.target.value) || 0 }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <input
+                      type="text"
+                      value={userProfile?.role || ''}
+                      readOnly
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 capitalize"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                    <input
+                      type="text"
+                      value={userProfile?.department || ''}
+                      onChange={(e) => setUserProfile(prev => ({ ...prev, department: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your department"
+                    />
+                  </div>
                 </div>
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={userProfile?.hourly_rate || 0}
-                    onChange={(e) => setUserProfile(prev => ({ ...prev, hourly_rate: parseFloat(e.target.value) || 0 }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+              <div className="mt-6">
+                <button
+                  onClick={() => handleUpdateProfile({
+                    full_name: userProfile.full_name,
+                    hourly_rate: userProfile.hourly_rate,
+                    department: userProfile.department
+                  })}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <Save size={18} />
+                  Update Profile
+                </button>
+              </div>
+            </div>
+
+            {/* Salary Calculator */}
+            <div className="workq-card">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <DollarSign size={24} />
+                Salary Calculator
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-sm text-blue-600 font-semibold">Hourly Rate</div>
+                  <div className="text-2xl font-bold text-blue-800">{formatCurrency(userProfile?.hourly_rate || 0)}</div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                  <input
-                    type="text"
-                    value={userProfile?.role || ''}
-                    readOnly
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 capitalize"
-                  />
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-sm text-green-600 font-semibold">Daily (8h)</div>
+                  <div className="text-2xl font-bold text-green-800">
+                    {formatCurrency((userProfile?.hourly_rate || 0) * 8)}
+                  </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                  <input
-                    type="text"
-                    value={userProfile?.department || ''}
-                    onChange={(e) => setUserProfile(prev => ({ ...prev, department: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter your department"
-                  />
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="text-sm text-purple-600 font-semibold">Monthly (160h)</div>
+                  <div className="text-2xl font-bold text-purple-800">
+                    {formatCurrency((userProfile?.hourly_rate || 0) * 160)}
+                  </div>
                 </div>
               </div>
             </div>
-            
-            <div className="mt-6">
-              <button
-                onClick={() => handleUpdateProfile({
-                  full_name: userProfile.full_name,
-                  hourly_rate: userProfile.hourly_rate,
-                  department: userProfile.department
-                })}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <Save size={18} />
-                Update Profile
-              </button>
+
+            {/* Export Data */}
+            <div className="workq-card">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Download size={24} />
+                Data Export
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <h4 className="font-semibold text-green-800 mb-2">Export Time Entries</h4>
+                  <p className="text-sm text-green-600 mb-3">Download all your time entries as a PDF report</p>
+                  <button
+                    onClick={() => {
+                      // Create PDF export functionality
+                      const generatePDF = () => {
+                        // Create a new window for printing
+                        const printWindow = window.open('', '_blank');
+                        
+                        // Calculate summary data
+                        const totalHours = calculateTotalHours();
+                        const totalEarnings = calculateTotalEarnings();
+                        const workingDays = getWorkingDays();
+                        const leaveDays = getLeaveDays();
+                        
+                        // Generate HTML content for PDF
+                        const htmlContent = `
+                          <!DOCTYPE html>
+                          <html>
+                            <head>
+                              <title>WorkQ-Time Entries Report</title>
+                              <style>
+                                body {
+                                  font-family: Arial, sans-serif;
+                                  margin: 20px;
+                                  color: #333;
+                                }
+                                .header {
+                                  text-align: center;
+                                  border-bottom: 2px solid #4CAF50;
+                                  padding-bottom: 20px;
+                                  margin-bottom: 30px;
+                                }
+                                .summary {
+                                  background-color: #f8f9fa;
+                                  padding: 20px;
+                                  border-radius: 8px;
+                                  margin-bottom: 30px;
+                                }
+                                .summary-grid {
+                                  display: grid;
+                                  grid-template-columns: repeat(3, 1fr);
+                                  gap: 15px;
+                                }
+                                .summary-item {
+                                  padding: 10px;
+                                  background: white;
+                                  border-radius: 5px;
+                                  border-left: 4px solid #4CAF50;
+                                }
+                                table {
+                                  width: 100%;
+                                  border-collapse: collapse;
+                                  margin-top: 20px;
+                                }
+                                th, td {
+                                  border: 1px solid #ddd;
+                                  padding: 12px;
+                                  text-align: left;
+                                }
+                                th {
+                                  background-color: #4CAF50;
+                                  color: white;
+                                  font-weight: bold;
+                                }
+                                tr:nth-child(even) {
+                                  background-color: #f2f2f2;
+                                }
+                                .footer {
+                                  margin-top: 30px;
+                                  text-align: center;
+                                  color: #666;
+                                  font-size: 12px;
+                                }
+                                @media print {
+                                  body { margin: 0; }
+                                  .no-print { display: none; }
+                                }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="header">
+                                <h1>WorkQ-Time Entries Report</h1>
+                                <div style="margin: 10px 0;">
+                                  <p><strong>Employee:</strong> ${userProfile?.full_name || 'N/A'}</p>
+                                  <p><strong>Employee ID:</strong> ${userProfile?.employee_id || 'N/A'}</p>
+                                  <p><strong>Generated on:</strong> ${new Date().toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                              
+                              <div class="summary">
+                                <h2>Report Summary</h2>
+                                <div class="summary-grid">
+                                  <div class="summary-item">
+                                    <strong>Total Hours Worked:</strong> ${totalHours.toFixed(1)} hrs
+                                  </div>
+                                  <div class="summary-item">
+                                    <strong>Total Earnings:</strong> ${formatCurrency(totalEarnings)}
+                                  </div>
+                                  <div class="summary-item">
+                                    <strong>Working Days:</strong> ${workingDays}
+                                  </div>
+                                  <div class="summary-item">
+                                    <strong>Leave Days:</strong> ${leaveDays}
+                                  </div>
+                                  <div class="summary-item">
+                                    <strong>Hourly Rate:</strong> ${formatCurrency(userProfile?.hourly_rate || 0)}/hr
+                                  </div>
+                                  <div class="summary-item">
+                                    <strong>Department:</strong> ${userProfile?.department || 'N/A'}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div class="entries">
+                                <h2>Time Entries</h2>
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th>Date</th>
+                                      <th>Clock In</th>
+                                      <th>Clock Out</th>
+                                      <th>Break (min)</th>
+                                      <th>Total Hours</th>
+                                      <th>Earnings</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    ${timeEntries.map(entry => `
+                                      <tr>
+                                        <td>${entry.work_date}</td>
+                                        <td>${entry.clock_in_time || '-'}</td>
+                                        <td>${entry.clock_out_time || '-'}</td>
+                                        <td>${entry.break_duration}</td>
+                                        <td>${entry.total_hours?.toFixed(2) || '0.00'}</td>
+                                        <td>${formatCurrency(((entry.total_hours || 0) * (userProfile?.hourly_rate || 0)))}</td>
+                                      </tr>
+                                    `).join('')}
+                                  </tbody>
+                                </table>
+                              </div>
+                              
+                              <div class="footer">
+                                <p>This report was generated by WorkQ Time Tracking System</p>
+                                <p style="font-size: 10px; margin-top: 5px;">Employee: ${userProfile?.full_name || 'N/A'} (ID: ${userProfile?.employee_id || 'N/A'})</p>
+                              </div>
+                            </body>
+                          </html>
+                        `;
+                        
+                        // Write content to new window
+                        printWindow.document.write(htmlContent);
+                        printWindow.document.close();
+                        
+                        // Wait for content to load, then trigger print dialog
+                        printWindow.onload = () => {
+                          setTimeout(() => {
+                            printWindow.print();
+                            // Close window after printing (optional)
+                            printWindow.onafterprint = () => {
+                              printWindow.close();
+                            };
+                          }, 250);
+                        };
+                      };
+                      
+                      generatePDF();
+                      showNotification('PDF report generated! Use your browser\'s print dialog to save as PDF.');
+                    }}
+                    className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Download size={16} />
+                    Export PDF
+                  </button>
+                </div>
+                
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-800 mb-2">Summary Report</h4>
+                  <div className="text-sm text-blue-600 space-y-1">
+                    <p>• Total Hours: {calculateTotalHours().toFixed(1)}</p>
+                    <p>• Total Earnings: {formatCurrency(calculateTotalEarnings())}</p>
+                    <p>• Working Days: {getWorkingDays()}</p>
+                    <p>• Leave Days: {getLeaveDays()}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Salary Calculator */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <DollarSign size={24} />
-              Salary Calculator
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-sm text-blue-600 font-semibold">Hourly Rate</div>
-                <div className="text-2xl font-bold text-blue-800">{formatCurrency(userProfile?.hourly_rate || 0)}</div>
-              </div>
-              
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-sm text-green-600 font-semibold">Daily (8h)</div>
-                <div className="text-2xl font-bold text-green-800">
-                  {formatCurrency((userProfile?.hourly_rate || 0) * 8)}
-                </div>
-              </div>
-              
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <div className="text-sm text-purple-600 font-semibold">Monthly (160h)</div>
-                <div className="text-2xl font-bold text-purple-800">
-                  {formatCurrency((userProfile?.hourly_rate || 0) * 160)}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Export Data */}
-<div className="bg-white rounded-xl shadow-lg p-6">
-  <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-    <Download size={24} />
-    Data Export
-  </h3>
-  
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div className="p-4 bg-green-50 rounded-lg">
-      <h4 className="font-semibold text-green-800 mb-2">Export Time Entries</h4>
-      <p className="text-sm text-green-600 mb-3">Download all your time entries as a PDF report</p>
-      <button
-        onClick={() => {
-          // Create PDF export functionality
-          const generatePDF = () => {
-            // Create a new window for printing
-            const printWindow = window.open('', '_blank');
-            
-            // Calculate summary data
-            const totalHours = calculateTotalHours();
-            const totalEarnings = calculateTotalEarnings();
-            const workingDays = getWorkingDays();
-            const leaveDays = getLeaveDays();
-            
-            // Generate HTML content for PDF
-            const htmlContent = `
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <title>WorkQ-Time Entries Report</title>
-                  <style>
-                    body {
-                      font-family: Arial, sans-serif;
-                      margin: 20px;
-                      color: #333;
-                    }
-                    .header {
-                      text-align: center;
-                      border-bottom: 2px solid #4CAF50;
-                      padding-bottom: 20px;
-                      margin-bottom: 30px;
-                    }
-                    .summary {
-                      background-color: #f8f9fa;
-                      padding: 20px;
-                      border-radius: 8px;
-                      margin-bottom: 30px;
-                    }
-                    .summary-grid {
-                      display: grid;
-                      grid-template-columns: repeat(3, 1fr);
-                      gap: 15px;
-                    }
-                    .summary-item {
-                      padding: 10px;
-                      background: white;
-                      border-radius: 5px;
-                      border-left: 4px solid #4CAF50;
-                    }
-                    table {
-                      width: 100%;
-                      border-collapse: collapse;
-                      margin-top: 20px;
-                    }
-                    th, td {
-                      border: 1px solid #ddd;
-                      padding: 12px;
-                      text-align: left;
-                    }
-                    th {
-                      background-color: #4CAF50;
-                      color: white;
-                      font-weight: bold;
-                    }
-                    tr:nth-child(even) {
-                      background-color: #f2f2f2;
-                    }
-                    .footer {
-                      margin-top: 30px;
-                      text-align: center;
-                      color: #666;
-                      font-size: 12px;
-                    }
-                    @media print {
-                      body { margin: 0; }
-                      .no-print { display: none; }
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="header">
-                    <h1>WorkQ-Time Entries Report</h1>
-                    <div style="margin: 10px 0;">
-                      <p><strong>Employee:</strong> ${userProfile?.full_name || 'N/A'}</p>
-                      <p><strong>Employee ID:</strong> ${userProfile?.employee_id || 'N/A'}</p>
-                      <p><strong>Generated on:</strong> ${new Date().toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  
-                  <div class="summary">
-                    <h2>Report Summary</h2>
-                    <div class="summary-grid">
-                      <div class="summary-item">
-                        <strong>Total Hours Worked:</strong> ${totalHours.toFixed(1)} hrs
-                      </div>
-                      <div class="summary-item">
-                        <strong>Total Earnings:</strong> ${formatCurrency(totalEarnings)}
-                      </div>
-                      <div class="summary-item">
-                        <strong>Working Days:</strong> ${workingDays}
-                      </div>
-                      <div class="summary-item">
-                        <strong>Leave Days:</strong> ${leaveDays}
-                      </div>
-                      <div class="summary-item">
-                        <strong>Hourly Rate:</strong> ${formatCurrency(userProfile?.hourly_rate || 0)}/hr
-                      </div>
-                      <div class="summary-item">
-                        <strong>Department:</strong> ${userProfile?.department || 'N/A'}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="entries">
-                    <h2>Time Entries</h2>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Clock In</th>
-                          <th>Clock Out</th>
-                          <th>Break (min)</th>
-                          <th>Total Hours</th>
-                          <th>Earnings</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${timeEntries.map(entry => `
-                          <tr>
-                            <td>${entry.work_date}</td>
-                            <td>${entry.clock_in_time || '-'}</td>
-                            <td>${entry.clock_out_time || '-'}</td>
-                            <td>${entry.break_duration}</td>
-                            <td>${entry.total_hours?.toFixed(2) || '0.00'}</td>
-                            <td>${formatCurrency(((entry.total_hours || 0) * (userProfile?.hourly_rate || 0)))}</td>
-                          </tr>
-                        `).join('')}
-                      </tbody>
-                    </table>
-                  </div>
-                  
-                  <div class="footer">
-                    <p>This report was generated by WorkQ Time Tracking System</p>
-                    <p style="font-size: 10px; margin-top: 5px;">Employee: ${userProfile?.full_name || 'N/A'} (ID: ${userProfile?.employee_id || 'N/A'})</p>
-                  </div>
-                </body>
-              </html>
-            `;
-            
-            // Write content to new window
-            printWindow.document.write(htmlContent);
-            printWindow.document.close();
-            
-            // Wait for content to load, then trigger print dialog
-            printWindow.onload = () => {
-              setTimeout(() => {
-                printWindow.print();
-                // Close window after printing (optional)
-                printWindow.onafterprint = () => {
-                  printWindow.close();
-                };
-              }, 250);
-            };
-          };
-          
-          generatePDF();
-          showNotification('PDF report generated! Use your browser\'s print dialog to save as PDF.');
-        }}
-        className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-      >
-        <Download size={16} />
-        Export PDF
-      </button>
-    </div>
-    
-    <div className="p-4 bg-blue-50 rounded-lg">
-      <h4 className="font-semibold text-blue-800 mb-2">Summary Report</h4>
-      <div className="text-sm text-blue-600 space-y-1">
-        <p>• Total Hours: {calculateTotalHours().toFixed(1)}</p>
-        <p>• Total Earnings: {formatCurrency(calculateTotalEarnings())}</p>
-        <p>• Working Days: {getWorkingDays()}</p>
-        <p>• Leave Days: {getLeaveDays()}</p>
+        )}
       </div>
-    </div>
-  </div>
-</div>
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 
