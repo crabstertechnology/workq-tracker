@@ -1,32 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, DollarSign, Coffee, Trash2, Save, X, LogIn, LogOut, Minus, User, Settings, BarChart3, Download, ArrowLeft, Eye, EyeOff, UserPlus, Shield } from 'lucide-react';
+import { Calendar, Clock, DollarSign, Coffee, Trash2, Save, X, LogIn, LogOut, User, Settings, BarChart3, Download, ArrowLeft, Eye, EyeOff, UserPlus, Shield, AlertCircle, CheckCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// PRODUCTION CONFIGURATION
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+// Supabase configuration
 
-// Validate Supabase configuration
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || 
-    SUPABASE_URL.includes('your-project-id') || 
-    SUPABASE_ANON_KEY.includes('your-anon-key')) {
-  throw new Error('Please configure your Supabase credentials in the .env file');
-}
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-// Supabase Client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const WorkTimeCalculator = () => {
+export const supabase = createClient(supabaseUrl, supabaseKey);
+        
+const WorkQ = () => {
   // Auth State
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // UI State
+  const [currentView, setCurrentView] = useState('timetracker');
   const [showLogin, setShowLogin] = useState(true);
   const [showRegister, setShowRegister] = useState(false);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   
-  
-  // Login Form State
+  // Form States
   const [loginForm, setLoginForm] = useState({
     email: '',
     password: '',
@@ -35,7 +32,6 @@ const WorkTimeCalculator = () => {
     error: ''
   });
   
-  // Registration Form State  
   const [registerForm, setRegisterForm] = useState({
     email: '',
     password: '',
@@ -43,75 +39,108 @@ const WorkTimeCalculator = () => {
     fullName: '',
     employeeId: '',
     role: 'employee',
+    hourlyRate: 500,
     showPassword: false,
     isLoading: false,
     error: ''
   });
   
-  // App State
-  const [currentView, setCurrentView] = useState('timetracker');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [workRecords, setWorkRecords] = useState({});
-  const [leaveRecords, setLeaveRecords] = useState({});
-  const [salaryPerHour, setSalaryPerHour] = useState(500);
-  const [showSalarySettings, setShowSalarySettings] = useState(true);
+  // Data States
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [todayEntry, setTodayEntry] = useState(null);
   
-  // Time entry form state
-  const [timeEntry, setTimeEntry] = useState({
-    selectedDate: '',
-    inTime: { hour: '', minute: '', period: 'AM' },
-    outTime: { hour: '', minute: '', period: 'PM' },
-    breakTime: 60
-  });
-  
-  const [timeStatus, setTimeStatus] = useState({
-    inTimeSet: false,
-    outTimeSet: false
-  });
-
-  const [selectedDateModal, setSelectedDateModal] = useState({
-    isOpen: false,
-    date: '',
-    dateStr: ''
+  // Time Entry Form
+  const [timeForm, setTimeForm] = useState({
+    clockIn: '',
+    clockOut: '',
+    breakDuration: 60,
+    notes: ''
   });
 
   // Initialize app
   useEffect(() => {
-    checkUserSession();
+    initializeApp();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await handleUserSignIn(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        handleUserSignOut();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Auto-fill current date
+  // Load data when user profile changes
   useEffect(() => {
-    const now = new Date();
-    const currentDateStr = now.toISOString().split('T')[0];
-    setTimeEntry(prev => ({ ...prev, selectedDate: currentDateStr }));
-  }, []);
-
-  // Save data when records change (only if authenticated)
-  useEffect(() => {
-    if (user && isAuthenticated) {
-      saveUserData();
+    if (userProfile) {
+      loadTimeEntries();
+      loadLeaveRequests();
+      loadTodayEntry();
     }
-  }, [workRecords, leaveRecords, salaryPerHour, user, isAuthenticated]);
+  }, [userProfile, currentDate]);
 
-  // Check for existing user session
-  const checkUserSession = async () => {
+  const initializeApp = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setUser(user);
-        setIsAuthenticated(true);
-        setShowLogin(false);
-        await loadUserData(user.id);
+        await handleUserSignIn(user);
       }
     } catch (error) {
-      console.error('Error checking user session:', error);
+      console.error('Error initializing app:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle Login
+  const handleUserSignIn = async (user) => {
+    setUser(user);
+    const profile = await loadUserProfile(user.id);
+    if (profile) {
+      setUserProfile(profile);
+      setIsAuthenticated(true);
+      setShowLogin(false);
+    }
+  };
+
+  const handleUserSignOut = () => {
+    setUser(null);
+    setUserProfile(null);
+    setIsAuthenticated(false);
+    setTimeEntries([]);
+    setLeaveRequests([]);
+    setTodayEntry(null);
+    setShowLogin(true);
+    setCurrentView('timetracker');
+  };
+
+  const loadUserProfile = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      return null;
+    }
+  };
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: '' });
+    }, 3000);
+  };
+
+  // Auth Functions
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginForm(prev => ({ ...prev, isLoading: true, error: '' }));
@@ -122,26 +151,15 @@ const WorkTimeCalculator = () => {
         password: loginForm.password
       });
       
-      if (error) {
-        setLoginForm(prev => ({ ...prev, error: error.message, isLoading: false }));
-        return;
-      }
+      if (error) throw error;
       
-      if (data.user) {
-        setUser(data.user);
-        setIsAuthenticated(true);
-        setShowLogin(false);
-        
-        await loadUserData(data.user.id);
-        setLoginForm({ email: '', password: '', showPassword: false, isLoading: false, error: '' });
-      }
+      setLoginForm({ email: '', password: '', showPassword: false, isLoading: false, error: '' });
+      showNotification('Successfully logged in!');
     } catch (error) {
-      console.error('Login error:', error);
-      setLoginForm(prev => ({ ...prev, error: 'Login failed. Please try again.', isLoading: false }));
+      setLoginForm(prev => ({ ...prev, error: error.message, isLoading: false }));
     }
   };
 
-  // Handle Registration
   const handleRegister = async (e) => {
     e.preventDefault();
     setRegisterForm(prev => ({ ...prev, isLoading: true, error: '' }));
@@ -159,167 +177,298 @@ const WorkTimeCalculator = () => {
           data: {
             full_name: registerForm.fullName,
             employee_id: registerForm.employeeId,
-            role: registerForm.role
+            role: registerForm.role,
+            hourly_rate: registerForm.hourlyRate
           }
         }
       });
       
-      if (error) {
-        setRegisterForm(prev => ({ ...prev, error: error.message, isLoading: false }));
-        return;
-      }
+      if (error) throw error;
       
-      alert('Registration successful! Please check your email to confirm your account.');
-      
+      showNotification('Registration successful! Please check your email to verify your account.');
       setRegisterForm({
-        email: '',
-        password: '',
-        confirmPassword: '',
-        fullName: '',
-        employeeId: '',
-        role: 'employee',
-        showPassword: false,
-        isLoading: false,
-        error: ''
+        email: '', password: '', confirmPassword: '', fullName: '', employeeId: '',
+        role: 'employee', hourlyRate: 500, showPassword: false, isLoading: false, error: ''
       });
       setShowRegister(false);
-      setShowAdminPanel(false);
       setShowLogin(true);
     } catch (error) {
-      console.error('Registration error:', error);
-      setRegisterForm(prev => ({ ...prev, error: 'Registration failed. Please try again.', isLoading: false }));
+      setRegisterForm(prev => ({ ...prev, error: error.message, isLoading: false }));
     }
   };
-  // Sign out
+
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
-      setUser(null);
-      setIsAuthenticated(false);
-      setWorkRecords({});
-      setLeaveRecords({});
-      setSalaryPerHour(500);
-      setCurrentView('timetracker');
-      setShowLogin(true);
-      setShowAdminPanel(false);
-      setShowRegister(false);
+      showNotification('Successfully logged out!');
     } catch (error) {
       console.error('Error signing out:', error);
     }
   };
 
-  // PRODUCTION DATA MANAGEMENT
-  const saveUserData = async () => {
-    if (!user || !isAuthenticated) return;
-    
+  // Data Loading Functions
+  const loadTimeEntries = async () => {
     try {
-      const userData = {
-        user_id: user.id,
-        work_records: workRecords,
-        leave_records: leaveRecords,
-        salary_per_hour: salaryPerHour,
-        last_updated: new Date().toISOString()
-      };
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       
-      const { error } = await supabase
-        .from('user_data')
-        .upsert(userData);
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('user_id', userProfile.id)
+        .gte('work_date', startOfMonth.toISOString().split('T')[0])
+        .lte('work_date', endOfMonth.toISOString().split('T')[0])
+        .order('work_date', { ascending: false });
       
-      if (error) {
-        console.error('Error saving data:', error);
-        alert('Error saving data. Please try again.');
-      }
+      if (error) throw error;
+      setTimeEntries(data || []);
     } catch (error) {
-      console.error('Error saving data:', error);
+      console.error('Error loading time entries:', error);
     }
   };
 
-  const loadUserData = async (userId) => {
+  const loadLeaveRequests = async () => {
     try {
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
       const { data, error } = await supabase
-        .from('user_data')
+        .from('leave_requests')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', userProfile.id)
+        .gte('leave_date', startOfMonth.toISOString().split('T')[0])
+        .lte('leave_date', endOfMonth.toISOString().split('T')[0]);
+      
+      if (error) throw error;
+      setLeaveRequests(data || []);
+    } catch (error) {
+      console.error('Error loading leave requests:', error);
+    }
+  };
+
+  const loadTodayEntry = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('user_id', userProfile.id)
+        .eq('work_date', today)
         .single();
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('Error loading data:', error);
-        return;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
+      setTodayEntry(data);
       
       if (data) {
-        setWorkRecords(data.work_records || {});
-        setLeaveRecords(data.leave_records || {});
-        setSalaryPerHour(data.salary_per_hour || 500);
+        setTimeForm({
+          clockIn: data.clock_in_time || '',
+          clockOut: data.clock_out_time || '',
+          breakDuration: data.break_duration || 60,
+          notes: data.notes || ''
+        });
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading today entry:', error);
     }
   };
 
-  // Return to index.html function
-  const returnToIndex = () => {
-    window.location.href = '../index.html';
-  };
-
-  // Time utility functions (same as before)
-  const timeObjectTo24Hour = (timeObj) => {
-    if (!timeObj.hour || !timeObj.minute) return '';
-    let hour = parseInt(timeObj.hour);
-    if (timeObj.period === 'PM' && hour !== 12) hour += 12;
-    if (timeObj.period === 'AM' && hour === 12) hour = 0;
-    return `${hour.toString().padStart(2, '0')}:${timeObj.minute}`;
-  };
-
-  const formatTimeDisplay = (timeObj) => {
-    if (!timeObj.hour || !timeObj.minute) return '';
-    return `${timeObj.hour}:${timeObj.minute} ${timeObj.period}`;
-  };
-
-  const getCurrentTimeObject = () => {
+  // Time Entry Functions
+  const handleClockIn = async () => {
     const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
-    return {
-      hour: hour12.toString().padStart(2, '0'),
-      minute: minutes.toString().padStart(2, '0'),
-      period: period
-    };
+    const timeString = now.toTimeString().split(' ')[0].substring(0, 5);
+    const today = now.toISOString().split('T')[0];
+    
+    try {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .upsert({
+          user_id: userProfile.id,
+          work_date: today,
+          clock_in_time: timeString,
+          break_duration: 60,
+          status: 'present'
+        }, {
+          onConflict: 'user_id,work_date'
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      setTodayEntry(data);
+      setTimeForm(prev => ({ ...prev, clockIn: timeString }));
+      showNotification('Clocked in successfully!');
+      await loadTimeEntries();
+    } catch (error) {
+      console.error('Error clocking in:', error);
+      showNotification('Error clocking in. Please try again.', 'error');
+    }
   };
 
-  const getCurrentTimeDisplay = () => {
-    const timeObj = getCurrentTimeObject();
-    return formatTimeDisplay(timeObj);
+  const handleClockOut = async () => {
+    if (!todayEntry) {
+      showNotification('Please clock in first!', 'error');
+      return;
+    }
+    
+    const now = new Date();
+    const timeString = now.toTimeString().split(' ')[0].substring(0, 5);
+    
+    try {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .update({
+          clock_out_time: timeString
+        })
+        .eq('id', todayEntry.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      setTodayEntry(data);
+      setTimeForm(prev => ({ ...prev, clockOut: timeString }));
+      showNotification('Clocked out successfully!');
+      await loadTimeEntries();
+    } catch (error) {
+      console.error('Error clocking out:', error);
+      showNotification('Error clocking out. Please try again.', 'error');
+    }
   };
 
-  const handleInTimeEntry = () => {
-    const currentTimeObj = getCurrentTimeObject();
-    setTimeEntry(prev => ({ ...prev, inTime: currentTimeObj }));
-    setTimeStatus(prev => ({ ...prev, inTimeSet: true }));
+  const handleManualTimeEntry = async () => {
+    if (!timeForm.clockIn) {
+      showNotification('Please enter clock in time!', 'error');
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .upsert({
+          user_id: userProfile.id,
+          work_date: selectedDate,
+          clock_in_time: timeForm.clockIn,
+          clock_out_time: timeForm.clockOut || null,
+          break_duration: timeForm.breakDuration,
+          notes: timeForm.notes,
+          status: 'present'
+        }, {
+          onConflict: 'user_id,work_date'
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      showNotification('Time entry saved successfully!');
+      setTimeForm({ clockIn: '', clockOut: '', breakDuration: 60, notes: '' });
+      await loadTimeEntries();
+      if (selectedDate === new Date().toISOString().split('T')[0]) {
+        await loadTodayEntry();
+      }
+    } catch (error) {
+      console.error('Error saving time entry:', error);
+      showNotification('Error saving time entry. Please try again.', 'error');
+    }
   };
 
-  const handleOutTimeEntry = () => {
-    const currentTimeObj = getCurrentTimeObject();
-    setTimeEntry(prev => ({ ...prev, outTime: currentTimeObj }));
-    setTimeStatus(prev => ({ ...prev, outTimeSet: true }));
+  const handleDeleteTimeEntry = async (entryId) => {
+    try {
+      const { error } = await supabase
+        .from('time_entries')
+        .delete()
+        .eq('id', entryId);
+      
+      if (error) throw error;
+      
+      showNotification('Time entry deleted successfully!');
+      await loadTimeEntries();
+      if (todayEntry && todayEntry.id === entryId) {
+        setTodayEntry(null);
+        setTimeForm({ clockIn: '', clockOut: '', breakDuration: 60, notes: '' });
+      }
+    } catch (error) {
+      console.error('Error deleting time entry:', error);
+      showNotification('Error deleting time entry.', 'error');
+    }
+  };
+
+  const handleLeaveRequest = async (date, leaveType = 'personal', reason = '') => {
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .upsert({
+          user_id: userProfile.id,
+          leave_date: date,
+          leave_type: leaveType,
+          reason: reason,
+          status: 'approved' // Auto-approve for now
+        }, {
+          onConflict: 'user_id,leave_date'
+        });
+      
+      if (error) throw error;
+      
+      showNotification('Leave request submitted successfully!');
+      await loadLeaveRequests();
+    } catch (error) {
+      console.error('Error submitting leave request:', error);
+      showNotification('Error submitting leave request.', 'error');
+    }
+  };
+
+  const handleUpdateProfile = async (updates) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .update(updates)
+        .eq('id', userProfile.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      setUserProfile(data);
+      showNotification('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showNotification('Error updating profile.', 'error');
+    }
+  };
+
+  // Utility Functions
+  const getCurrentTime = () => {
+    return new Date().toTimeString().split(' ')[0].substring(0, 5);
   };
 
   const formatCurrency = (amount) => {
-    const rupees = Math.floor(amount);
-    const paise = Math.round((amount - rupees) * 100);
-    if (paise === 0) {
-      return `₹${rupees.toLocaleString('en-IN')}`;
-    }
-    return `₹${rupees.toLocaleString('en-IN')}.${paise.toString().padStart(2, '0')}`;
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR'
+    }).format(amount);
   };
 
-  // Calendar functions
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
+  const calculateTotalHours = () => {
+    return timeEntries.reduce((total, entry) => total + (entry.total_hours || 0), 0);
+  };
 
-  const getDaysInMonth = (month, year) => {
+  const calculateTotalEarnings = () => {
+    return calculateTotalHours() * (userProfile?.hourly_rate || 0);
+  };
+
+  const getWorkingDays = () => {
+    return timeEntries.filter(entry => entry.status === 'present').length;
+  };
+
+  const getLeaveDays = () => {
+    return leaveRequests.filter(req => req.status === 'approved').length;
+  };
+
+  // Calendar Functions
+  const getDaysInMonth = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
@@ -337,201 +486,50 @@ const WorkTimeCalculator = () => {
 
   const formatDate = (day) => {
     if (!day) return '';
-    return `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    return new Date(year, month, day).toISOString().split('T')[0];
   };
 
-  const calculateWorkingHours = (inTimeObj, outTimeObj, breakMinutes = 60) => {
-    const inTime24 = timeObjectTo24Hour(inTimeObj);
-    const outTime24 = timeObjectTo24Hour(outTimeObj);
-    
-    if (!inTime24 || !outTime24) return 0;
-    
-    const inDate = new Date(`2000-01-01T${inTime24}`);
-    const outDate = new Date(`2000-01-01T${outTime24}`);
-    
-    if (outDate < inDate) {
-      outDate.setDate(outDate.getDate() + 1);
-    }
-    
-    const diffMs = outDate - inDate;
-    const diffHours = diffMs / (1000 * 60 * 60);
-    const breakHours = breakMinutes / 60;
-    
-    return Math.max(0, diffHours - breakHours);
+  const getDateData = (dateStr) => {
+    const timeEntry = timeEntries.find(entry => entry.work_date === dateStr);
+    const leaveRequest = leaveRequests.find(req => req.leave_date === dateStr);
+    return { timeEntry, leaveRequest };
   };
 
-  const handleTimeSubmit = () => {
-    if (!timeEntry.selectedDate || !timeEntry.inTime.hour || !timeEntry.outTime.hour) {
-      alert('Please fill in all required fields (Date, In Time, Out Time)');
-      return;
-    }
-    
-    const workingHours = calculateWorkingHours(timeEntry.inTime, timeEntry.outTime, timeEntry.breakTime);
-    
-    setWorkRecords(prev => ({
-      ...prev,
-      [timeEntry.selectedDate]: {
-        inTime: timeEntry.inTime,
-        outTime: timeEntry.outTime,
-        breakTime: timeEntry.breakTime,
-        workingHours: workingHours
-      }
-    }));
-    
-    setTimeEntry(prev => ({
-      ...prev,
-      inTime: { hour: '', minute: '', period: 'AM' },
-      outTime: { hour: '', minute: '', period: 'PM' },
-      breakTime: 60
-    }));
-    
-    setTimeStatus({
-      inTimeSet: false,
-      outTimeSet: false
-    });
-    
-    alert('Work time added successfully!');
-  };
-
-  const handleDateClick = (day) => {
-    if (!day) return;
-    const dateStr = formatDate(day);
-    const date = new Date(currentYear, currentMonth, day);
-    const formattedDate = date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    
-    setSelectedDateModal({
-      isOpen: true,
-      date: formattedDate,
-      dateStr: dateStr
-    });
-  };
-
-  const handleLeaveToggle = (dateStr) => {
-    setLeaveRecords(prev => ({
-      ...prev,
-      [dateStr]: !prev[dateStr]
-    }));
-  };
-
-  const deleteWorkRecord = (dateStr) => {
-    setWorkRecords(prev => {
-      const newRecords = { ...prev };
-      delete newRecords[dateStr];
-      return newRecords;
-    });
-  };
-
-  const editWorkRecord = (dateStr) => {
-    const record = workRecords[dateStr];
-    if (record) {
-      setTimeEntry({
-        selectedDate: dateStr,
-        inTime: record.inTime,
-        outTime: record.outTime,
-        breakTime: record.breakTime
-      });
-      setTimeStatus({
-        inTimeSet: true,
-        outTimeSet: true
-      });
-      setCurrentView('timetracker');
-    }
-  };
-
-  // Statistics functions
-  const getTotalHours = () => {
-    return Object.values(workRecords).reduce((total, record) => total + record.workingHours, 0);
-  };
-
-  const getTotalSalary = () => {
-    return getTotalHours() * salaryPerHour;
-  };
-
-  const getWorkingDays = () => {
-    return Object.keys(workRecords).length;
-  };
-
-  const getLeaveDays = () => {
-    return Object.values(leaveRecords).filter(Boolean).length;
-  };
-
-  const getMonthlyStats = () => {
-    const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-    const monthlyRecords = Object.entries(workRecords).filter(([date]) => 
-      date.startsWith(currentMonthStr)
-    );
-    
-    const monthlyHours = monthlyRecords.reduce((total, [, record]) => total + record.workingHours, 0);
-    const monthlySalary = monthlyHours * salaryPerHour;
-    const monthlyDays = monthlyRecords.length;
-    
-    return { monthlyHours, monthlySalary, monthlyDays };
-  };
-
-  const exportData = () => {
-    alert('Export functionality - would generate PDF report');
-  };
-
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  const days = getDaysInMonth(currentMonth, currentYear);
-
-  // Loading screen
+  // Loading Screen
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <h2 className="text-xl font-semibold text-gray-700">Loading WorkQ...</h2>
-          <p className="text-gray-500 mt-2">Production Mode - Initializing Application</p>
         </div>
       </div>
     );
   }
 
-// Login/Register screens
-  if (!isAuthenticated || !user) {
+  // Auth Screens
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          {/* Return to Index Button */}
-          <button
-            onClick={returnToIndex}
-            className="mb-6 flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
-          >
-            <ArrowLeft size={20} />
-            <span>Return to Home</span>
-          </button>
-
           <div className="bg-white rounded-2xl shadow-xl p-8">
-            {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
                 WorkQ
               </h1>
-              <p className="text-gray-600">Employee Time Tracking System</p>
-              <p className="text-sm text-gray-500 mt-2">
-                🚀 Production Mode - Secure Employee Dashboard
-              </p>
+              <p className="text-gray-600">Professional Employee Time Tracking</p>
             </div>
-            {/* Admin Registration Panel (for first user or admin access) */}
-            {(showAdminPanel || showRegister) && (
+
+            {/* Register Form */}
+            {showRegister && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800">Register New Employee</h2>
+                  <h2 className="text-2xl font-bold text-gray-800">Register Employee</h2>
                   <button
-                    type="button"
                     onClick={() => {
                       setShowRegister(false);
-                      setShowAdminPanel(false);
                       setShowLogin(true);
                     }}
                     className="text-gray-500 hover:text-gray-700"
@@ -585,16 +583,30 @@ const WorkTimeCalculator = () => {
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
-                      value={registerForm.role}
-                      onChange={(e) => setRegisterForm(prev => ({ ...prev, role: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="employee">Employee</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                      <select
+                        value={registerForm.role}
+                        onChange={(e) => setRegisterForm(prev => ({ ...prev, role: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="employee">Employee</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={registerForm.hourlyRate}
+                        onChange={(e) => setRegisterForm(prev => ({ ...prev, hourlyRate: parseFloat(e.target.value) }))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="500"
+                      />
+                    </div>
                   </div>
                   
                   <div>
@@ -653,7 +665,7 @@ const WorkTimeCalculator = () => {
             )}
 
             {/* Login Form */}
-            {showLogin && !showRegister && !showAdminPanel && (
+            {showLogin && !showRegister && (
               <div className="space-y-4">
                 <h2 className="text-2xl font-bold text-gray-800 text-center mb-6">Login</h2>
                 
@@ -716,135 +728,70 @@ const WorkTimeCalculator = () => {
                   </button>
                 </form>
                 
-                <div className="flex gap-2">
+                <div className="mt-4">
                   <button
-                    type="button"
                     onClick={() => {
-                      setShowAdminPanel(true);
                       setShowRegister(true);
                       setShowLogin(false);
                     }}
-                    className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                    className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-medium transition-colors duration-200 flex items-center justify-center gap-2"
                   >
                     <Shield size={20} />
-                    Admin Register
+                    Register New Employee
                   </button>
                 </div>
               </div>
             )}
 
-            
-
-            {/* System Info */}
             <div className="mt-6 text-xs text-gray-500 text-center">
-              <p>🔒 Production Mode - Supabase Database</p>
-              <p className="mt-1">Your data is stored safely and privately</p>
-              <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-green-700">
-                <p className="font-medium">✅ Production Mode Active</p>
-                <p className="text-xs">Connected to Supabase Database</p>
-              </div>
+              <p>🔒 Secure • Professional • Database-Powered</p>
             </div>
           </div>
         </div>
       </div>
     );
   }
-             
-  // Time Input Component
-  const TimeInput = ({ label, timeObj, onChange, buttonLabel, buttonIcon, buttonColor, onButtonClick }) => (
-    <div>
-      <label className="block text-sm font-medium mb-1 text-gray-700">{label}</label>
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="flex-1 flex gap-1">
-          <select
-            value={timeObj.hour}
-            onChange={(e) => onChange({ ...timeObj, hour: e.target.value })}
-            className="p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-          >
-            <option value="">--</option>
-            {[...Array(12)].map((_, i) => {
-              const hour = (i + 1).toString().padStart(2, '0');
-              return <option key={hour} value={hour}>{hour}</option>;
-            })}
-          </select>
-          <span className="p-2 sm:p-3 text-gray-500 font-bold text-sm sm:text-base">:</span>
-          <select
-            value={timeObj.minute}
-            onChange={(e) => onChange({ ...timeObj, minute: e.target.value })}
-            className="p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-          >
-            <option value="">--</option>
-            {[...Array(60)].map((_, i) => {
-              const minute = i.toString().padStart(2, '0');
-              return <option key={minute} value={minute}>{minute}</option>;
-            })}
-          </select>
-          <select
-            value={timeObj.period}
-            onChange={(e) => onChange({ ...timeObj, period: e.target.value })}
-            className="p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-          >
-            <option value="AM">AM</option>
-            <option value="PM">PM</option>
-          </select>
-        </div>
-        <button
-          onClick={onButtonClick}
-          className={`${buttonColor} text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:opacity-90 flex items-center justify-center gap-2 whitespace-nowrap text-sm sm:text-base w-full sm:w-auto transition-all duration-200 transform hover:scale-105 shadow-lg`}
-          title="Use current time"
-        >
-          {buttonIcon}
-          <span className="hidden sm:inline">{buttonLabel}</span>
-          <span className="sm:hidden">{buttonLabel.split(' ')[0]}</span>
-        </button>
-      </div>
-    </div>
-  );
 
-  // Navigation Component
-  const Navigation = () => (
-    <div className="bg-white shadow-lg rounded-xl p-4 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-            {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-          </div>
-          <div>
-            <h2 className="font-semibold text-gray-800">
-              {user?.user_metadata?.full_name || user?.email}
-            </h2>
-            <p className="text-sm text-gray-500">{user?.email}</p>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-xs text-green-600">
-                {user?.user_metadata?.role === 'admin' ? 'Admin' : 'Employee'} 
-                {user?.user_metadata?.employee_id && ` • ${user.user_metadata.employee_id}`}
-              </span>
+  // Main App Interface
+  return (
+    <div className="max-w-7xl mx-auto p-4 bg-gray-50 min-h-screen">
+      {/* Notification */}
+      {notification.show && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center gap-2 ${
+          notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+        }`}>
+          {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
+          {notification.message}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="text-center mb-6">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+          WorkQ
+        </h1>
+        <p className="text-gray-600">Employee Time Tracking System</p>
+      </div>
+
+      {/* Navigation */}
+      <div className="bg-white shadow-lg rounded-xl p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+              {userProfile?.full_name?.charAt(0) || 'U'}
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-800">{userProfile?.full_name}</h2>
+              <p className="text-sm text-gray-500">{userProfile?.email}</p>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-green-600">
+                  {userProfile?.role === 'admin' ? 'Administrator' : 'Employee'} 
+                  {userProfile?.employee_id && ` • ${userProfile.employee_id}`}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {user?.user_metadata?.role === 'admin' && (
-            <button
-              onClick={() => {
-                setShowAdminPanel(true);
-                setShowRegister(true);
-                setShowLogin(false);
-                setCurrentView('admin');
-              }}
-              className="text-purple-600 hover:text-purple-800 font-medium transition-colors duration-200 flex items-center gap-2"
-            >
-              <Shield size={18} />
-              <span className="hidden sm:inline">Admin</span>
-            </button>
-          )}
-          <button
-            onClick={returnToIndex}
-            className="text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 flex items-center gap-2"
-          >
-            <ArrowLeft size={18} />
-            <span className="hidden sm:inline">Home</span>
-          </button>
           <button
             onClick={handleSignOut}
             className="text-red-600 hover:text-red-800 font-medium transition-colors duration-200 flex items-center gap-2"
@@ -853,737 +800,530 @@ const WorkTimeCalculator = () => {
             <span className="hidden sm:inline">Sign Out</span>
           </button>
         </div>
-      </div>
-      
-      <div className="flex gap-2 overflow-x-auto">
-        <button
-          onClick={() => setCurrentView('timetracker')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-            currentView === 'timetracker' 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          <Clock size={18} />
-          Time Tracker
-        </button>
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-            currentView === 'dashboard' 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          <BarChart3 size={18} />
-          Dashboard
-        </button>
-        <button
-          onClick={() => setCurrentView('settings')}
-          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-            currentView === 'settings' 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          <Settings size={18} />
-          Settings
-        </button>
-      </div>
-    </div>
-  );
-
-  // Dashboard View
-  const DashboardView = () => {
-    const { monthlyHours, monthlySalary, monthlyDays } = getMonthlyStats();
-    
-    return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Your personal work analytics</p>
-          <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            Connected to Supabase Database
-          </div>
-        </div>
         
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
-            <div className="text-xs sm:text-sm text-blue-600 font-semibold">Total Hours</div>
-            <div className="text-lg sm:text-2xl font-bold text-blue-800">{getTotalHours().toFixed(1)}h</div>
+        <div className="flex gap-2 overflow-x-auto">
+          <button
+            onClick={() => setCurrentView('timetracker')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+              currentView === 'timetracker' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Clock size={18} />
+            Time Tracker
+          </button>
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+              currentView === 'dashboard' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <BarChart3 size={18} />
+            Dashboard
+          </button>
+          <button
+            onClick={() => setCurrentView('settings')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+              currentView === 'settings' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Settings size={18} />
+            Settings
+          </button>
+        </div>
+      </div>
+
+      {/* Time Tracker View */}
+      {currentView === 'timetracker' && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Quick Actions */}
+          <div className="xl:col-span-1">
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
+                <Clock className="text-blue-600" size={20} />
+                Quick Clock In/Out
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="text-sm text-gray-600">Current Time</div>
+                  <div className="text-xl font-bold text-gray-800">{getCurrentTime()}</div>
+                  <div className="text-sm text-gray-500">{new Date().toLocaleDateString()}</div>
+                </div>
+                
+                {todayEntry ? (
+                  <div className="space-y-3">
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                      <div className="text-sm text-green-700 font-medium">Today's Entry</div>
+                      <div className="text-sm text-green-600">
+                        In: {todayEntry.clock_in_time || 'Not clocked in'}<br/>
+                        Out: {todayEntry.clock_out_time || 'Not clocked out'}<br/>
+                        Hours: {todayEntry.total_hours?.toFixed(1) || '0'} hrs
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={handleClockIn}
+                        className="bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <LogIn size={16} />
+                        Update In
+                      </button>
+                      <button
+                        onClick={handleClockOut}
+                        disabled={!todayEntry.clock_in_time}
+                        className="bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <LogOut size={16} />
+                        Clock Out
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleClockIn}
+                    className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-lg font-medium"
+                  >
+                    <LogIn size={20} />
+                    Clock In Now
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Manual Time Entry */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Manual Time Entry</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Clock In</label>
+                    <input
+                      type="time"
+                      value={timeForm.clockIn}
+                      onChange={(e) => setTimeForm(prev => ({ ...prev, clockIn: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Clock Out</label>
+                    <input
+                      type="time"
+                      value={timeForm.clockOut}
+                      onChange={(e) => setTimeForm(prev => ({ ...prev, clockOut: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Break Duration (minutes)</label>
+                  <input
+                    type="number"
+                    value={timeForm.breakDuration}
+                    onChange={(e) => setTimeForm(prev => ({ ...prev, breakDuration: parseInt(e.target.value) || 0 }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={timeForm.notes}
+                    onChange={(e) => setTimeForm(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows="2"
+                    placeholder="Optional notes..."
+                  />
+                </div>
+                
+                <button
+                  onClick={handleManualTimeEntry}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save size={18} />
+                  Save Time Entry
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="bg-green-50 p-3 sm:p-4 rounded-lg border border-green-200">
-            <div className="text-xs sm:text-sm text-green-600 font-semibold">Total Earnings</div>
-            <div className="text-lg sm:text-2xl font-bold text-green-800">{formatCurrency(getTotalSalary())}</div>
-          </div>
-          <div className="bg-purple-50 p-3 sm:p-4 rounded-lg border border-purple-200">
-            <div className="text-xs sm:text-sm text-purple-600 font-semibold">Working Days</div>
-            <div className="text-lg sm:text-2xl font-bold text-purple-800">{getWorkingDays()}</div>
-          </div>
-          <div className="bg-orange-50 p-3 sm:p-4 rounded-lg border border-orange-200">
-            <div className="text-xs sm:text-sm text-orange-600 font-semibold">Leave Days</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-800">{getLeaveDays()}</div>
+
+          {/* Calendar */}
+          <div className="xl:col-span-2">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Calendar className="text-blue-600" size={24} />
+                  Work Calendar
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    ← Previous
+                  </button>
+                  <h3 className="text-lg font-semibold min-w-[200px] text-center">
+                    {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </h3>
+                  <button
+                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                {/* Calendar Header */}
+                <div className="grid grid-cols-7 bg-gray-100">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <div key={day} className="p-3 text-center font-semibold text-gray-700">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="grid grid-cols-7">
+                  {getDaysInMonth().map((day, index) => {
+                    const dateStr = formatDate(day);
+                    const { timeEntry, leaveRequest } = getDateData(dateStr);
+                    const isToday = day && dateStr === new Date().toISOString().split('T')[0];
+                    
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => day && setSelectedDate(dateStr)}
+                        className={`min-h-[120px] p-2 border-r border-b relative cursor-pointer hover:bg-gray-50 transition-colors ${
+                          isToday ? 'bg-blue-50' : ''
+                        } ${leaveRequest ? 'bg-red-50' : ''}`}
+                      >
+                        {day && (
+                          <>
+                            <div className={`font-bold mb-2 ${
+                              isToday ? 'text-blue-600 bg-blue-100 w-6 h-6 rounded-full flex items-center justify-center text-sm' : 
+                              timeEntry ? 'text-green-700' : 
+                              leaveRequest ? 'text-red-700' : 'text-gray-700'
+                            }`}>
+                              {day}
+                            </div>
+                            
+                            {timeEntry && (
+                              <div className="space-y-1">
+                                <div className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
+                                  {timeEntry.total_hours?.toFixed(1) || '0'}h
+                                </div>
+                                <div className="text-xs text-green-700">
+                                  {formatCurrency((timeEntry.total_hours || 0) * (userProfile?.hourly_rate || 0))}
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteTimeEntry(timeEntry.id);
+                                  }}
+                                  className="absolute bottom-1 right-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                  title="Delete entry"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            )}
+                            
+                            {leaveRequest && (
+                              <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium">
+                                Leave
+                              </div>
+                            )}
+                            
+                            {!timeEntry && !leaveRequest && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLeaveRequest(dateStr);
+                                }}
+                                className="absolute bottom-1 right-1 p-1 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
+                                title="Mark as leave"
+                              >
+                                <Coffee size={12} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Monthly Stats */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">
-            {monthNames[currentMonth]} {currentYear} Summary
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-blue-600 font-semibold">Monthly Hours</p>
-              <p className="text-2xl font-bold text-blue-800">{monthlyHours.toFixed(1)}h</p>
+      {/* Dashboard View */}
+      {currentView === 'dashboard' && (
+        <div className="space-y-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
+            <p className="text-gray-600">Your work analytics and statistics</p>
+          </div>
+          
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="text-sm text-blue-600 font-semibold">Total Hours</div>
+              <div className="text-2xl font-bold text-blue-800">{calculateTotalHours().toFixed(1)}h</div>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <p className="text-green-600 font-semibold">Monthly Earnings</p>
-              <p className="text-2xl font-bold text-green-800">{formatCurrency(monthlySalary)}</p>
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="text-sm text-green-600 font-semibold">Total Earnings</div>
+              <div className="text-2xl font-bold text-green-800">{formatCurrency(calculateTotalEarnings())}</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <p className="text-purple-600 font-semibold">Working Days</p>
-              <p className="text-2xl font-bold text-purple-800">{monthlyDays}</p>
+            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div className="text-sm text-purple-600 font-semibold">Working Days</div>
+              <div className="text-2xl font-bold text-purple-800">{getWorkingDays()}</div>
+            </div>
+            <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+              <div className="text-sm text-orange-600 font-semibold">Leave Days</div>
+              <div className="text-2xl font-bold text-orange-800">{getLeaveDays()}</div>
             </div>
           </div>
-        </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Work Records</h3>
-          <div className="space-y-3">
-            {Object.entries(workRecords)
-              .sort(([a], [b]) => new Date(b) - new Date(a))
-              .slice(0, 5)
-              .map(([date, record]) => (
-                <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          {/* Recent Entries */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Time Entries</h3>
+            <div className="space-y-3">
+              {timeEntries.slice(0, 10).map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-800">
-                      {new Date(date).toLocaleDateString('en-US', { 
+                      {new Date(entry.work_date).toLocaleDateString('en-US', { 
                         weekday: 'short', 
                         month: 'short', 
                         day: 'numeric' 
                       })}
                     </p>
                     <p className="text-sm text-gray-600">
-                      {formatTimeDisplay(record.inTime)} - {formatTimeDisplay(record.outTime)}
+                      {entry.clock_in_time} - {entry.clock_out_time || 'Not clocked out'}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-800">{record.workingHours.toFixed(1)}h</p>
-                    <p className="text-sm text-green-600">{formatCurrency(record.workingHours * salaryPerHour)}</p>
+                    <p className="font-semibold text-gray-800">{entry.total_hours?.toFixed(1) || '0'}h</p>
+                    <p className="text-sm text-green-600">
+                      {formatCurrency((entry.total_hours || 0) * (userProfile?.hourly_rate || 0))}
+                    </p>
                   </div>
                 </div>
               ))}
-            {Object.keys(workRecords).length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Calendar className="mx-auto mb-2" size={48} />
-                <p>No work records yet. Start tracking your time!</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Settings View
-  const SettingsView = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
-        <p className="text-gray-600">Manage your preferences and data</p>
-      </div>
-      
-      {/* Profile Settings */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <User size={24} />
-          Profile Information
-        </h3>
-        
-        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
-            {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-          </div>
-          <div>
-            <h4 className="font-semibold text-gray-800">
-              {user?.user_metadata?.full_name || 'User'}
-            </h4>
-            <p className="text-gray-600">{user?.email}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <p className="text-sm text-green-600">
-                ✓ {user?.user_metadata?.role === 'admin' ? 'Administrator' : 'Employee'} Account
-              </p>
-            </div>
-            {user?.user_metadata?.employee_id && (
-              <p className="text-xs text-gray-500 mt-1">
-                Employee ID: {user.user_metadata.employee_id}
-              </p>
-            )}
-            <p className="text-xs text-gray-500">User ID: {user?.id?.substring(0, 8)}...</p>
-          </div>
-        </div>
-      </div>
-
-     {/* Database Status */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">Database Status</h3>
-        <div className="p-4 rounded-lg bg-green-50 border border-green-200">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <div>
-              <h4 className="font-semibold text-green-800">
-                🚀 Production Mode - Supabase Connected
-              </h4>
-              <p className="text-sm text-green-600">
-                Your data is securely stored in Supabase database and automatically synced.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Salary Settings */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <DollarSign size={24} />
-          Salary Configuration
-        </h3>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">Hourly Rate</label>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold">₹</span>
-              <input
-                type="number"
-                step="0.01"
-                value={salaryPerHour}
-                onChange={(e) => setSalaryPerHour(parseFloat(e.target.value) || 0)}
-                className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter hourly rate"
-              />
-            </div>
-          </div>
-          
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="text-sm text-blue-700">
-              <p>Current calculations based on ₹{salaryPerHour}/hour:</p>
-              <p className="mt-1">• Daily (8h): {formatCurrency(salaryPerHour * 8)}</p>
-              <p>• Monthly (160h): {formatCurrency(salaryPerHour * 160)}</p>
-              <p>• Total earned: {formatCurrency(getTotalSalary())}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Data Management */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <Download size={24} />
-          Data Management
-        </h3>
-        
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h4 className="font-semibold text-green-800 mb-2">Export Report</h4>
-              <p className="text-sm text-green-600 mb-3">Download a professional PDF report with all your data</p>
-              <button
-                onClick={exportData}
-                className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Download size={16} />
-                Export PDF Report
-              </button>
-            </div>
-            
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-semibold text-blue-800 mb-2">Data Summary</h4>
-              <div className="text-sm text-blue-600 space-y-1">
-                <p>• {getWorkingDays()} work records</p>
-                <p>• {getLeaveDays()} leave days</p>
-                <p>• {getTotalHours().toFixed(1)} total hours</p>
-                <p>• Data since: {Object.keys(workRecords).sort()[0] || 'No data'}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* App Information */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">About WorkQ</h3>
-        <div className="text-sm text-gray-600 space-y-2">
-          <p>Version: 3.0.0 (Production Ready with Supabase Integration)</p>
-          <p>Mode: Production Mode (Supabase Database)</p>
-          <p>Authentication: Supabase Auth</p>
-          <p>Database: Supabase PostgreSQL</p>
-          <p>Features: Time tracking, salary calculation, secure login, data export, user management</p>
-          <p className="text-green-600 font-medium">✓ Secure • ✓ Private • ✓ User-Specific Data • ✓ Real-time Sync</p>
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="font-medium text-green-800">🚀 Production Benefits:</p>
-            <ul className="text-green-700 text-xs mt-1 space-y-1">
-              <li>• Real user authentication with email verification</li>
-              <li>• Secure database storage with Row Level Security</li>
-              <li>• Automatic data backup and synchronization</li>
-              <li>• Multi-device access with same login</li>
-              <li>• Admin user management capabilities</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-
-  // Time Tracker View
-  const TimeTrackerView = () => (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-      {/* Time Entry Section */}
-      <div className="xl:col-span-1">
-        <div className="bg-white rounded-xl shadow-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-gray-200">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
-            <Clock className="text-blue-600" size={20} />
-            Time Entry
-            <div className="ml-auto">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Connected to database"></div>
-            </div>
-          </h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Date</label>
-              <input
-                type="date"
-                value={timeEntry.selectedDate}
-                onChange={(e) => setTimeEntry(prev => ({ ...prev, selectedDate: e.target.value }))}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-              />
-            </div>
-            
-            <TimeInput
-              label="In Time"
-              timeObj={timeEntry.inTime}
-              onChange={(newTime) => setTimeEntry(prev => ({ ...prev, inTime: newTime }))}
-              buttonLabel={timeStatus.inTimeSet ? "Update In" : "In Now"}
-              buttonIcon={<LogIn size={16} />}
-              buttonColor={timeStatus.inTimeSet ? "bg-green-700 hover:bg-green-800" : "bg-green-600 hover:bg-green-700"}
-              onButtonClick={handleInTimeEntry}
-            />
-            
-            <TimeInput
-              label="Out Time"
-              timeObj={timeEntry.outTime}
-              onChange={(newTime) => setTimeEntry(prev => ({ ...prev, outTime: newTime }))}
-              buttonLabel={timeStatus.outTimeSet ? "Update Out" : "Out Now"}
-              buttonIcon={<LogOut size={16} />}
-              buttonColor={timeStatus.outTimeSet ? "bg-red-700 hover:bg-red-800" : "bg-red-600 hover:bg-red-700"}
-              onButtonClick={handleOutTimeEntry}
-            />
-            
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700 flex items-center gap-2">
-                <Minus size={16} />
-                Break Time (minutes)
-              </label>
-              <input
-                type="number"
-                value={timeEntry.breakTime}
-                onChange={(e) => setTimeEntry(prev => ({ ...prev, breakTime: parseInt(e.target.value) || 0 }))}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                placeholder="60"
-              />
-            </div>
-            
-            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-              <div className="text-sm text-gray-600 font-medium">Current Time:</div>
-              <div className="text-base sm:text-lg font-bold text-gray-800">{getCurrentTimeDisplay()}</div>
-              
-              {/* Status Indicators */}
-              <div className="mt-2 flex flex-col gap-1">
-                {timeStatus.inTimeSet && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-green-700 font-medium">Clocked In at {formatTimeDisplay(timeEntry.inTime)}</span>
-                  </div>
-                )}
-                {timeStatus.outTimeSet && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-red-700 font-medium">Clocked Out at {formatTimeDisplay(timeEntry.outTime)}</span>
-                  </div>
-                )}
-                {!timeStatus.inTimeSet && !timeStatus.outTimeSet && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    <span className="text-gray-600">Ready to clock in</span>
-                  </div>
-                )}
-                {timeStatus.inTimeSet && !timeStatus.outTimeSet && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    <span className="text-blue-700 font-medium">Currently working...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {timeStatus.inTimeSet && timeStatus.outTimeSet && timeEntry.inTime.hour && timeEntry.outTime.hour && (
-              <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
-                <div className="text-sm text-blue-700 font-medium mb-1">Preview:</div>
-                <div className="text-xs sm:text-sm text-blue-600 mb-1">Working Hours: {calculateWorkingHours(timeEntry.inTime, timeEntry.outTime, timeEntry.breakTime).toFixed(1)}h</div>
-                <div className="text-xs sm:text-sm text-blue-600">Salary: {formatCurrency(calculateWorkingHours(timeEntry.inTime, timeEntry.outTime, timeEntry.breakTime) * salaryPerHour)}</div>
-              </div>
-            )}
-            
-            <button
-              onClick={handleTimeSubmit}
-              className="w-full bg-blue-600 text-white py-2 sm:py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 font-medium text-sm sm:text-base"
-            >
-              <Save size={18} />
-              Save Work Time
-            </button>
-            
-            <button
-              onClick={() => {
-                setTimeEntry(prev => ({ 
-                  ...prev, 
-                  inTime: { hour: '', minute: '', period: 'AM' },
-                  outTime: { hour: '', minute: '', period: 'PM' },
-                  breakTime: 60 
-                }));
-                setTimeStatus({
-                  inTimeSet: false,
-                  outTimeSet: false
-                });
-              }}
-              className="w-full bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 flex items-center justify-center gap-2 text-sm sm:text-base"
-            >
-              <X size={16} />
-              Clear Times
-            </button>
-          </div>
-        </div>
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 xl:grid-cols-1 gap-3 sm:gap-4">
-          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
-            <div className="text-xs sm:text-sm text-blue-600 font-semibold">Total Hours</div>
-            <div className="text-lg sm:text-2xl font-bold text-blue-800">{getTotalHours().toFixed(1)}h</div>
-          </div>
-          <div className="bg-green-50 p-3 sm:p-4 rounded-lg border border-green-200">
-            <div className="text-xs sm:text-sm text-green-600 font-semibold">Total Salary</div>
-            <div className="text-lg sm:text-2xl font-bold text-green-800">{formatCurrency(getTotalSalary())}</div>
-          </div>
-          <div className="bg-purple-50 p-3 sm:p-4 rounded-lg border border-purple-200">
-            <div className="text-xs sm:text-sm text-purple-600 font-semibold">Working Days</div>
-            <div className="text-lg sm:text-2xl font-bold text-purple-800">{getWorkingDays()}</div>
-          </div>
-          <div className="bg-orange-50 p-3 sm:p-4 rounded-lg border border-orange-200">
-            <div className="text-xs sm:text-sm text-orange-600 font-semibold">Leave Days</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-800">{getLeaveDays()}</div>
-          </div>
-        </div>
-      </div>
-
-       {/* Calendar Section */}
-      <div className="xl:col-span-2">
-        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <Calendar className="text-blue-600" size={24} />
-              Work Calendar
-              <div className="ml-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Real-time sync enabled"></div>
-              </div>
-            </h1>
-          </div>
-
-          <div className="flex items-center justify-between mb-6">
-            <button
-              onClick={() => setCurrentDate(new Date(currentYear, currentMonth - 1, 1))}
-              className="px-4 py-2 sm:px-5 sm:py-2.5 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm sm:text-base font-medium transition-all duration-200"
-            >
-              <span className="hidden sm:inline">← Previous</span>
-              <span className="sm:hidden">Next →</span>
-            </button>
-          </div>
-
-          <div className="bg-white border rounded-lg overflow-hidden">
-            {/* Calendar Header */}
-            <div className="grid grid-cols-7 bg-gray-100">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
-                <div key={day} className="p-3 sm:p-4 text-center font-semibold text-gray-700 text-xs sm:text-sm">
-                  <span className="hidden sm:inline">{day}</span>
-                  <span className="sm:hidden">{day.charAt(0)}</span>
+              {timeEntries.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <Calendar className="mx-auto mb-2" size={48} />
+                  <p>No time entries yet. Start tracking your work!</p>
                 </div>
-              ))}
+              )}
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7">
-              {days.map((day, index) => {
-                const dateStr = formatDate(day);
-                const workRecord = workRecords[dateStr];
-                const isLeave = leaveRecords[dateStr];
-                const isToday = day && new Date().toDateString() === new Date(currentYear, currentMonth, day).toDateString();
+      {/* Settings View */}
+      {currentView === 'settings' && (
+        <div className="space-y-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
+            <p className="text-gray-600">Manage your profile and preferences</p>
+          </div>
+          
+          {/* Profile Settings */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <User size={24} />
+              Profile Information
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={userProfile?.full_name || ''}
+                    onChange={(e) => setUserProfile(prev => ({ ...prev, full_name: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
                 
-                return (
-                  <div
-                    key={index}
-                    onClick={() => handleDateClick(day)}
-                    className={`min-h-[100px] sm:min-h-[130px] p-2 sm:p-3 border-r border-b relative transition-all duration-200 ${
-                      day ? 'hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
-                    } ${isLeave ? 'bg-red-50' : ''} ${isToday ? 'bg-yellow-50' : ''}`}
-                  >
-                    {day && (
-                      <>
-                        {/* Date Number */}
-                        <div className={`font-bold mb-2 text-base sm:text-lg ${
-                          isToday ? 'text-blue-600 bg-blue-100 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-sm sm:text-base' : 
-                          workRecord ? 'text-green-700' : 
-                          isLeave ? 'text-red-700' : 'text-gray-700'
-                        }`}>
-                          {day}
-                        </div>
-                        
-                        {/* Status Indicators */}
-                        <div className="space-y-1">
-                          {workRecord && (
-                            <div className="text-center">
-                              <div className="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium mb-1">
-                                {workRecord.workingHours.toFixed(1)}h
-                              </div>
-                              <div className="text-xs text-green-700 font-semibold hidden sm:block">
-                                {formatCurrency(workRecord.workingHours * salaryPerHour)}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {isLeave && (
-                            <div className="text-center">
-                              <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium">
-                                Leave
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Action Buttons - Desktop Only */}
-                        {workRecord && (
-                          <div className="hidden sm:flex gap-1 mt-2 justify-end absolute bottom-2 right-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                editWorkRecord(dateStr);
-                              }}
-                              className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                              title="Edit"
-                            >
-                              <Clock size={10} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteWorkRecord(dateStr);
-                              }}
-                              className="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={10} />
-                            </button>
-                          </div>
-                        )}
-                        
-                        {/* Leave Toggle - Desktop Only */}
-                        {!workRecord && (
-                          <div className="hidden sm:block absolute bottom-2 right-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleLeaveToggle(dateStr);
-                              }}
-                              className={`p-1 rounded text-xs transition-all duration-200 ${
-                                isLeave ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
-                              }`}
-                              title={isLeave ? "Remove Leave" : "Mark Leave"}
-                            >
-                              <Coffee size={10} />
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                  <input
+                    type="text"
+                    value={userProfile?.employee_id || ''}
+                    readOnly
+                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={userProfile?.email || ''}
+                    readOnly
+                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={userProfile?.hourly_rate || 0}
+                    onChange={(e) => setUserProfile(prev => ({ ...prev, hourly_rate: parseFloat(e.target.value) || 0 }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <input
+                    type="text"
+                    value={userProfile?.role || ''}
+                    readOnly
+                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 capitalize"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                  <input
+                    type="text"
+                    value={userProfile?.department || ''}
+                    onChange={(e) => setUserProfile(prev => ({ ...prev, department: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter your department"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="max-w-7xl mx-auto p-3 sm:p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                WorkQ
-              </h1>
-              <p className="text-gray-600">Employee Time Tracking System</p>
-              <p className="text-sm text-gray-500 mt-2">
-                🚀 Production Mode - Secure Employee Dashboard
-              </p>
-            </div>
-
-
-      {/* Navigation */}
-      <Navigation />
-
-      {/* Main Content */}
-      {currentView === 'timetracker' && <TimeTrackerView />}
-      {currentView === 'dashboard' && <DashboardView />}
-      {currentView === 'settings' && <SettingsView />}
-
-      {/* Date Details Modal */}
-      {selectedDateModal.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-4 sm:p-6 rounded-xl max-w-md w-full shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Date Details</h3>
+            
+            <div className="mt-6">
               <button
-                onClick={() => setSelectedDateModal({ isOpen: false, date: '', dateStr: '' })}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => handleUpdateProfile({
+                  full_name: userProfile.full_name,
+                  hourly_rate: userProfile.hourly_rate,
+                  department: userProfile.department
+                })}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
               >
-                <X size={20} />
+                <Save size={18} />
+                Update Profile
               </button>
             </div>
+          </div>
+
+          {/* Salary Calculator */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <DollarSign size={24} />
+              Salary Calculator
+            </h3>
             
-            <div className="mb-4">
-              <h4 className="font-semibold text-gray-700 mb-2">{selectedDateModal.date}</h4>
-            </div>
-            
-            {(() => {
-              const workRecord = workRecords[selectedDateModal.dateStr];
-              const isLeave = leaveRecords[selectedDateModal.dateStr];
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="text-sm text-blue-600 font-semibold">Hourly Rate</div>
+                <div className="text-2xl font-bold text-blue-800">{formatCurrency(userProfile?.hourly_rate || 0)}</div>
+              </div>
               
-              if (workRecord) {
-                return (
-                  <div className="space-y-3">
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <span className="font-semibold text-green-700">Work Day</span>
-                      </div>
-                      
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Clock In:</span>
-                          <span className="font-medium">{formatTimeDisplay(workRecord.inTime)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Clock Out:</span>
-                          <span className="font-medium">{formatTimeDisplay(workRecord.outTime)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Break Time:</span>
-                          <span className="font-medium">{workRecord.breakTime} minutes</span>
-                        </div>
-                        <div className="flex justify-between border-t pt-2">
-                          <span className="text-gray-600">Working Hours:</span>
-                          <span className="font-bold text-green-700">{workRecord.workingHours.toFixed(1)} hours</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Salary:</span>
-                          <span className="font-bold text-green-700">{formatCurrency(workRecord.workingHours * salaryPerHour)}</span>
-                        </div>
-                      </div>
-                    </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="text-sm text-green-600 font-semibold">Daily (8h)</div>
+                <div className="text-2xl font-bold text-green-800">
+                  {formatCurrency((userProfile?.hourly_rate || 0) * 8)}
+                </div>
+              </div>
+              
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="text-sm text-purple-600 font-semibold">Monthly (160h)</div>
+                <div className="text-2xl font-bold text-purple-800">
+                  {formatCurrency((userProfile?.hourly_rate || 0) * 160)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Export Data */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Download size={24} />
+              Data Export
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-green-50 rounded-lg">
+                <h4 className="font-semibold text-green-800 mb-2">Export Time Entries</h4>
+                <p className="text-sm text-green-600 mb-3">Download all your time entries as a CSV file</p>
+                <button
+                  onClick={() => {
+                    // Create CSV export functionality
+                    const csvContent = [
+                      ['Date', 'Clock In', 'Clock Out', 'Break (min)', 'Total Hours', 'Earnings'],
+                      ...timeEntries.map(entry => [
+                        entry.work_date,
+                        entry.clock_in_time || '',
+                        entry.clock_out_time || '',
+                        entry.break_duration,
+                        entry.total_hours?.toFixed(2) || '0',
+                        ((entry.total_hours || 0) * (userProfile?.hourly_rate || 0)).toFixed(2)
+                      ])
+                    ].map(row => row.join(',')).join('\n');
                     
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          editWorkRecord(selectedDateModal.dateStr);
-                          setSelectedDateModal({ isOpen: false, date: '', dateStr: '' });
-                        }}
-                        className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                      >
-                        Edit Record
-                      </button>
-                      <button
-                        onClick={() => {
-                          deleteWorkRecord(selectedDateModal.dateStr);
-                          setSelectedDateModal({ isOpen: false, date: '', dateStr: '' });
-                        }}
-                        className="flex-1 bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                );
-              } else if (isLeave) {
-                return (
-                  <div className="space-y-3">
-                    <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                        <span className="font-semibold text-red-700">Leave Day</span>
-                      </div>
-                      <p className="text-sm text-red-600">You are on leave for this day.</p>
-                    </div>
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `workq-time-entries-${new Date().toISOString().split('T')[0]}.csv`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
                     
-                    <button
-                      onClick={() => {
-                        handleLeaveToggle(selectedDateModal.dateStr);
-                        setSelectedDateModal({ isOpen: false, date: '', dateStr: '' });
-                      }}
-                      className="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                      Remove Leave
-                    </button>
-                  </div>
-                );
-              } else {
-                return (
-                  <div className="space-y-3">
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                        <span className="font-semibold text-gray-700">No Activity</span>
-                      </div>
-                      <p className="text-sm text-gray-600">No work record or leave marked for this day.</p>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setTimeEntry(prev => ({ ...prev, selectedDate: selectedDateModal.dateStr }));
-                          setSelectedDateModal({ isOpen: false, date: '', dateStr: '' });
-                          setCurrentView('timetracker');
-                        }}
-                        className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                      >
-                        Add Work Time
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleLeaveToggle(selectedDateModal.dateStr);
-                          setSelectedDateModal({ isOpen: false, date: '', dateStr: '' });
-                        }}
-                        className="flex-1 bg-orange-500 text-white py-2 rounded-lg hover:bg-orange-600 transition-colors"
-                      >
-                        Mark Leave
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-            })()}
+                    showNotification('Time entries exported successfully!');
+                  }}
+                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Download size={16} />
+                  Export CSV
+                </button>
+              </div>
+              
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-semibold text-blue-800 mb-2">Summary Report</h4>
+                <div className="text-sm text-blue-600 space-y-1">
+                  <p>• Total Hours: {calculateTotalHours().toFixed(1)}</p>
+                  <p>• Total Earnings: {formatCurrency(calculateTotalEarnings())}</p>
+                  <p>• Working Days: {getWorkingDays()}</p>
+                  <p>• Leave Days: {getLeaveDays()}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1591,4 +1331,4 @@ const WorkTimeCalculator = () => {
   );
 };
 
-export default WorkTimeCalculator;
+export default WorkQ;
