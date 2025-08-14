@@ -12,7 +12,7 @@ const WorkQ = () => {
   // Auth State
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // UI State
@@ -71,20 +71,18 @@ const WorkQ = () => {
     leaveReason: ''
   });
 
-  // Initialize app
-  useEffect(() => {
-    initializeApp();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        await handleUserSignIn(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        handleUserSignOut();
-      }
-    });
+  // TO this:
+useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      await handleUserSignIn(session.user);
+    } else if (event === 'SIGNED_OUT') {
+      handleUserSignOut();
+    }
+  });
 
-    return () => subscription.unsubscribe();
-  }, []);
+  return () => subscription.unsubscribe();
+}, []);
 
   // Load data when user profile changes
   useEffect(() => {
@@ -116,18 +114,7 @@ const WorkQ = () => {
     }
   }, [selectedDate, timeEntries]);
 
-  const initializeApp = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await handleUserSignIn(user);
-      }
-    } catch (error) {
-      console.error('Error initializing app:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
 
   const handleUserSignIn = async (user) => {
     setUser(user);
@@ -660,17 +647,7 @@ const formatDate = (day) => {
     return { timeEntry, leaveRequest };
   };
 
-  // Loading Screen
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-700">Loading WorkQ...</h2>
-        </div>
-      </div>
-    );
-  }
+  
 
   // Auth Screens (keeping the same as original)
   if (!isAuthenticated) {
