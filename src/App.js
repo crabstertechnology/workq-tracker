@@ -71,18 +71,7 @@ const WorkQ = () => {
     leaveReason: ''
   });
 
-  // TO this:
-useEffect(() => {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-      await handleUserSignIn(session.user);
-    } else if (event === 'SIGNED_OUT') {
-      handleUserSignOut();
-    }
-  });
-
-  return () => subscription.unsubscribe();
-}, []);
+  
 
   // Load data when user profile changes
   useEffect(() => {
@@ -117,15 +106,105 @@ useEffect(() => {
   
 
   const handleUserSignIn = async (user) => {
+  try {
     setUser(user);
+    
+    // First check if we have a valid user
+    if (!user || !user.id) {
+      throw new Error('Invalid user data');
+    }
+    
     const profile = await loadUserProfile(user.id);
     if (profile) {
       setUserProfile(profile);
       setIsAuthenticated(true);
       setShowLogin(false);
+    } else {
+      // Instead of signing out, create a profile from user metadata
+      if (user.user_metadata) {
+        const newProfile = {
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata.full_name || user.email.split('@')[0],
+          employee_id: user.user_metadata.employee_id || `EMP_${Date.now()}`,
+          role: user.user_metadata.role || 'employee',
+          hourly_rate: user.user_metadata.hourly_rate || 500,
+          department: user.user_metadata.department || ''
+        };
+        
+        // Create profile in database
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .upsert(newProfile, { onConflict: 'id' })
+          .select()
+          .single();
+        
+        if (!error && data) {
+          setUserProfile(data);
+          setIsAuthenticated(true);
+          setShowLogin(false);
+          showNotification('Profile created successfully!');
+        } else {
+          throw new Error('Could not create user profile');
+        }
+      } else {
+        throw new Error('User profile not found and no metadata available');
+      }
+    }
+  } catch (error) {
+    console.error('Error signing in user:', error);
+    // Don't sign out on error, just reset state
+    setUser(null);
+    setUserProfile(null);
+    setIsAuthenticated(false);
+    setShowLogin(true);
+    showNotification(error.message || 'Error loading profile. Please try again.', 'error');
+  }
+
+};
+// Improved useEffect with better session handling
+useEffect(() => {
+  const initializeAuth = async () => {
+    try {
+      // Get current session
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Session error:', error);
+        setIsAuthenticated(false);
+        setShowLogin(true);
+        return;
+      }
+      
+      if (session?.user) {
+        await handleUserSignIn(session.user);
+      } else {
+        // No session, show login
+        setIsAuthenticated(false);
+        setShowLogin(true);
+      }
+    } catch (error) {
+      console.error('Error initializing auth:', error);
+      setIsAuthenticated(false);
+      setShowLogin(true);
     }
   };
 
+  initializeAuth();
+
+  // Listen for auth changes
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    console.log('Auth state changed:', event, session?.user?.email);
+    
+    if (event === 'SIGNED_IN' && session?.user) {
+      await handleUserSignIn(session.user);
+    } else if (event === 'SIGNED_OUT') {
+      handleUserSignOut();
+    }
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
   const handleUserSignOut = () => {
     setUser(null);
     setUserProfile(null);
@@ -138,20 +217,26 @@ useEffect(() => {
   };
 
   const loadUserProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      return null;
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      // If profile doesn't exist, return null (don't throw)
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw error;
     }
-  };
+    return data;
+  } catch (error) {
+    console.error('Error loading user profile:', error);
+    return null;
+  }
+};
 
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
